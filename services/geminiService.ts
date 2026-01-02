@@ -25,40 +25,26 @@ export const categorizeGoal = async (title: string, description: string): Promis
   }
 };
 
-/**
- * دالة التحليل الذكي مع نظام محاولات مزدوج لضمان العمل في Vercel
- */
 export const generateGoalBreakdown = async (yearlyGoal: string) => {
-  const modelsToTry = ['gemini-3-pro-preview', 'gemini-3-flash-preview'];
-  let lastError = null;
-
+  // استخدام Flash كخيار أول في Vercel لسرعة الاستجابة وتجنب الـ Timeout
+  const modelsToTry = ['gemini-3-flash-preview', 'gemini-3-pro-preview'];
+  
   for (const modelName of modelsToTry) {
     try {
       const ai = getAi();
-      const prompt = `أنت الآن خبير تقني متخصص في بناء المسارات التعليمية (Roadmaps). 
-المهمة: قم بتحليل الهدف التالي: "${yearlyGoal}" وتوليد خطة تعلم تقنية متدرجة.
-
-شروط حتمية:
-1. إذا كان الهدف برمجياً (مثل CSS)، يجب أن تبدأ المهام بـ (Syntax, Selectors) ثم (Box Model, Flexbox) ثم (Advanced Grid, Animations).
-2. لا تستخدم أبداً جمل عامة مثل "البحث" أو "الاستعداد". استخدم مصطلحات المادة العلمية نفسها.
-3. يجب أن تكون كل مرحلة شهرية عبارة عن "قفزة نوعية" في المهارة.
-
-رد بصيغة JSON حصراً بهذا التنسيق:
+      const prompt = `أنت خبير مسارات تعلم. حلل الهدف: "${yearlyGoal}".
+المطلوب: خطة تقنية متدرجة. ابدأ بالأساسيات ثم الاحتراف. استخدم مصطلحات فنية دقيقة.
+رد بصيغة JSON:
 {
-  "category": "الفئة",
+  "category": "الفئة بالإنجليزية",
   "monthlyGoals": [
     {
-      "title": "عنوان تقني محدد (مثلاً: إتقان الـ Selectors و Syntax)",
-      "description": "وصف ما سيتم تعلمه تقنياً في ${yearlyGoal}",
-      "weeklySubGoals": [
-        "مهمة برمجية/عملية دقيقة 1",
-        "مهمة برمجية/عملية دقيقة 2"
-      ]
-    },
-    { "title": "المرحلة التقنية التالية", "description": "...", "weeklySubGoals": ["...", "..."] },
-    { "title": "مرحلة الاحتراف والتطبيق", "description": "...", "weeklySubGoals": ["...", "..."] }
+      "title": "عنوان تقني محدد",
+      "description": "وصف فني",
+      "weeklySubGoals": ["مهمة 1", "مهمة 2"]
+    }
   ],
-  "suggestedDailyTask": "عادة تقنية يومية"
+  "suggestedDailyTask": "عادة يومية"
 }`;
 
       const response = await ai.models.generateContent({
@@ -66,7 +52,8 @@ export const generateGoalBreakdown = async (yearlyGoal: string) => {
         contents: prompt,
         config: {
           responseMimeType: "application/json",
-          thinkingConfig: { thinkingBudget: modelName.includes('pro') ? 12000 : 0 }
+          // تقليل ميزانية التفكير لضمان سرعة الرد في بيئة الويب
+          thinkingConfig: { thinkingBudget: modelName.includes('pro') ? 4000 : 0 }
         }
       });
 
@@ -77,38 +64,30 @@ export const generateGoalBreakdown = async (yearlyGoal: string) => {
       const result = JSON.parse(jsonStr);
 
       if (result.monthlyGoals && result.monthlyGoals.length > 0) {
-        return { ...result, isSuccess: true, usedModel: modelName };
+        return { ...result, isSuccess: true };
       }
     } catch (e) {
-      lastError = e;
-      console.warn(`Model ${modelName} failed, trying next...`, e);
+      console.warn(`Model ${modelName} failed, trying next...`);
     }
   }
 
-  // إذا فشلت كل المحاولات، نقوم بتوليد خطة "شبه ذكية" تعتمد على الكلمات المفتاحية
   const topic = yearlyGoal.replace(/تعلم|إتقان|دراسة|حفظ/g, "").trim() || yearlyGoal;
   return {
     category: "general",
     isSuccess: false,
     monthlyGoals: [
       { 
-        title: `إتقان أساسيات وقواعد ${topic}`, 
-        description: `التركيز على الـ Syntax والمفاهيم الجوهرية لـ ${topic}.`, 
-        weeklySubGoals: [
-          `تطبيق عملي على أول 3 دروس في ${topic}`,
-          `بناء نموذج مصغر يختبر فهمك لأساسيات ${topic}`
-        ] 
+        title: `إتقان أساسيات ${topic}`, 
+        description: `التركيز على القواعد الجوهرية لـ ${topic}.`, 
+        weeklySubGoals: [`دراسة المدخل الأساسي لـ ${topic}`, `تطبيق عملي بسيط`] 
       },
       { 
-        title: `المفاهيم المتقدمة في ${topic}`, 
-        description: `الانتقال إلى الاحتراف في ${topic} عبر مشاريع حقيقية.`, 
-        weeklySubGoals: [
-          `تنفيذ مشروع "تحدي" يجمع كل ما تعلمته في ${topic}`,
-          `مراجعة الأخطاء الشائعة وتحسين جودة العمل في ${topic}`
-        ] 
+        title: `الاحتراف في ${topic}`, 
+        description: `بناء مشاريع متقدمة في ${topic}.`, 
+        weeklySubGoals: [`تحدي مستوى متوسط`, `إنجاز مشروع كامل`] 
       }
     ],
-    suggestedDailyTask: `ممارسة ${topic} لمدة 20 دقيقة يومياً`
+    suggestedDailyTask: `التدرب على ${topic} لمدة 15 دقيقة`
   };
 };
 
@@ -119,14 +98,12 @@ export const generateDailyTasksForProgress = async (yearlyGoals: Goal[]) => {
     const context = yearlyGoals.map(g => g.title).join(", ");
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `أهدافي: [${context}]. اقترح مهمتين صغيرتين جداً لليوم. JSON: { "tasks": [{ "title": "مهمة", "category": "الفئة" }] }`,
+      contents: `بناءً على أهدافي: [${context}]، اعطني مهمتين سريعتين لليوم. JSON: { "tasks": [{ "title": "مهمة", "category": "الفئة" }] }`,
       config: { responseMimeType: "application/json" }
     });
     const data = JSON.parse(response.text?.match(/\{[\s\S]*\}/)?.[0] || "{}");
     return data.tasks || [];
-  } catch (e) {
-    return [];
-  }
+  } catch (e) { return []; }
 };
 
 export const calculateRewardCost = async (rewardTitle: string): Promise<number> => {
@@ -134,7 +111,7 @@ export const calculateRewardCost = async (rewardTitle: string): Promise<number> 
     const ai = getAi();
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `تكلفة مكافأة "${rewardTitle}" بالنقاط (50-1500). رقم فقط.`,
+      contents: `كم نقطة تستحق مكافأة "${rewardTitle}" (50-1000)؟ رد بالرقم فقط.`,
     });
     return parseInt(response.text?.replace(/[^0-9]/g, '') || "200");
   } catch (e) { return 250; }
@@ -146,8 +123,8 @@ export const analyzeBudget = async (expenses: Expense[], dailyLimit: number): Pr
     const summary = expenses.slice(0, 5).map(e => `${e.description}: ${e.amount}`).join(", ");
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `حلل: [${summary}] بحد ${dailyLimit}. نصيحة مالية بالعربية.`,
+      contents: `حلل هذه المصروفات: [${summary}] بحد يومي ${dailyLimit}. نصيحة مالية قصيرة جداً بالعربية.`,
     });
-    return response.text || "وفر اليوم لتربح غداً!";
-  } catch (e) { return "راقب مصروفاتك."; }
+    return response.text || "راقب مصروفاتك بحكمة.";
+  } catch (e) { return "استمر في مراقبة ميزانيتك."; }
 };
