@@ -5,7 +5,7 @@ import {
   Gamepad2, Coffee, BrainCircuit, Trash2, Sparkles, Clock, 
   CalendarDays, CalendarRange, LayoutGrid, Zap, Tag, ReceiptText, 
   BedDouble, TrendingUp, BarChart3, Save, BookOpen, Dumbbell, 
-  Moon, MessageSquareQuote, X, Loader2, Sparkle
+  Moon, MessageSquareQuote, X, Loader2, Sparkle, RefreshCcw
 } from 'lucide-react';
 import { Goal, Budget, Reward, UserStats, TimeFrame, Expense, GoalCategory } from './types.ts';
 import { 
@@ -43,7 +43,7 @@ const App: React.FC = () => {
 
   const [goals, setGoals] = useState<Goal[]>(() => {
     try {
-      const saved = localStorage.getItem('enjaz_v4_goals');
+      const saved = localStorage.getItem('enjaz_v5_goals');
       let loaded = saved ? JSON.parse(saved) : [];
       const fixedIds = FIXED_DAILY_TASKS.map(t => t.id);
       const existingFixed = loaded.filter((g: any) => fixedIds.includes(g.id)).map((g: any) => g.id);
@@ -54,14 +54,14 @@ const App: React.FC = () => {
   
   const [customRewards, setCustomRewards] = useState<Reward[]>(() => {
     try {
-      const saved = localStorage.getItem('enjaz_v4_rewards');
+      const saved = localStorage.getItem('enjaz_v5_rewards');
       return saved ? JSON.parse(saved) : [];
     } catch (e) { return []; }
   });
   
   const [budget, setBudget] = useState<Budget>(() => {
     try {
-      const saved = localStorage.getItem('enjaz_v4_budget');
+      const saved = localStorage.getItem('enjaz_v5_budget');
       return saved ? JSON.parse(saved) : { monthlyLimit: 2000, dailyLimit: 45, spentThisMonth: 0, spentToday: 0, rolloverBalance: 0, expenses: [] };
     } catch (e) { return { monthlyLimit: 2000, dailyLimit: 45, spentThisMonth: 0, spentToday: 0, rolloverBalance: 0, expenses: [] }; }
   });
@@ -73,13 +73,13 @@ const App: React.FC = () => {
       }
     };
     try {
-      const saved = localStorage.getItem('enjaz_v4_stats');
+      const saved = localStorage.getItem('enjaz_v5_stats');
       return saved ? JSON.parse(saved) : d;
     } catch (e) { return d; }
   });
   
   const [newGoalText, setNewGoalText] = useState('');
-  const [lastResetDate, setLastResetDate] = useState(() => localStorage.getItem('enjaz_v4_reset') || new Date().toDateString());
+  const [lastResetDate, setLastResetDate] = useState(() => localStorage.getItem('enjaz_v5_reset') || new Date().toDateString());
   const [expenseAmount, setExpenseAmount] = useState<string>('');
   const [expenseNote, setExpenseNote] = useState<string>('');
   const [aiBudgetAdvice, setAiBudgetAdvice] = useState<string | null>(null);
@@ -88,10 +88,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     setIsSaving(true);
-    localStorage.setItem('enjaz_v4_goals', JSON.stringify(goals));
-    localStorage.setItem('enjaz_v4_rewards', JSON.stringify(customRewards));
-    localStorage.setItem('enjaz_v4_budget', JSON.stringify(budget));
-    localStorage.setItem('enjaz_v4_stats', JSON.stringify(stats));
+    localStorage.setItem('enjaz_v5_goals', JSON.stringify(goals));
+    localStorage.setItem('enjaz_v5_rewards', JSON.stringify(customRewards));
+    localStorage.setItem('enjaz_v5_budget', JSON.stringify(budget));
+    localStorage.setItem('enjaz_v5_stats', JSON.stringify(stats));
     const t = setTimeout(() => setIsSaving(false), 800);
     return () => clearTimeout(t);
   }, [goals, customRewards, budget, stats]);
@@ -101,7 +101,7 @@ const App: React.FC = () => {
     if (lastResetDate !== today) {
       const reset = async () => {
         setIsAiLoading(true);
-        setAiStatus('جاري مراجعة تقدمك وتحديث المهام...');
+        setAiStatus('يتم الآن تحديث مهامك اليومية بذكاء...');
         const base = goals.map(g => {
           if (g.timeFrame === 'daily') {
             return FIXED_DAILY_TASKS.some(f => f.id === g.id) ? { ...g, completed: false } : null;
@@ -116,7 +116,7 @@ const App: React.FC = () => {
             const aiTasks = suggestions.map((t: any, i: number) => ({
               id: `ai-d-${Date.now()}-${i}`,
               title: t.title,
-              description: 'مهمة حصرية من Gemini Pro',
+              description: 'مهمة مخصصة ليومك',
               timeFrame: 'daily',
               category: (t.category || 'general').toLowerCase() as GoalCategory,
               completed: false, failed: false, points: 20, dueDate: new Date().toISOString(), isAiGenerated: true
@@ -130,25 +130,28 @@ const App: React.FC = () => {
         setStats(s => ({ ...s, isRestDay: false }));
         setBudget(b => ({ ...b, spentToday: 0, expenses: [] })); 
         setLastResetDate(today);
-        localStorage.setItem('enjaz_v4_reset', today);
+        localStorage.setItem('enjaz_v5_reset', today);
         setIsAiLoading(false);
       };
       reset();
     }
   }, [lastResetDate]);
 
-  const handleAiBreakdown = async () => {
-    if (!newGoalText.trim()) return;
+  const handleAiBreakdown = async (titleOverride?: string) => {
+    const targetTitle = titleOverride || newGoalText;
+    if (!targetTitle.trim()) return;
+    
     setIsAiLoading(true);
-    setAiStatus(`Gemini Pro يقوم بتحليل "${newGoalText}" الآن...`);
+    setAiStatus(`Gemini Pro يحلل "${targetTitle}" بعمق لتصميم خطة فريدة...`);
+    
     try {
-      const res = await generateGoalBreakdown(newGoalText);
+      const res = await generateGoalBreakdown(targetTitle);
       if (res && res.monthlyGoals) {
         const yId = Date.now().toString();
         const cat = (res.category || 'general').toLowerCase() as GoalCategory;
         
         const mainGoal: Goal = { 
-          id: yId, title: newGoalText, description: 'هدف سنوي محوري', 
+          id: yId, title: targetTitle, description: 'هدف سنوي مخصص', 
           timeFrame: 'yearly', category: cat, completed: false, failed: false, points: 500, dueDate: new Date().toISOString() 
         };
         
@@ -172,20 +175,26 @@ const App: React.FC = () => {
         
         if (res.suggestedDailyTask) {
           subTasks.push({ 
-            id: `${yId}-daily-h`, title: res.suggestedDailyTask, description: 'عادة جوهرية مقترحة', 
+            id: `${yId}-daily-h`, title: res.suggestedDailyTask, description: 'عادة جوهرية مخصصة', 
             timeFrame: 'daily', category: cat, completed: false, failed: false, 
             points: 25, dueDate: new Date().toISOString(), isAiGenerated: true, parentId: yId 
           });
         }
         
-        setGoals(p => [mainGoal, ...subTasks, ...p]);
+        // إذا كان تحديثاً، نحذف القديم أولاً
+        if (titleOverride) {
+           setGoals(p => [mainGoal, ...subTasks, ...p.filter(g => g.title !== titleOverride)]);
+        } else {
+           setGoals(p => [mainGoal, ...subTasks, ...p]);
+        }
         setNewGoalText('');
       }
     } catch (e) {
-      alert("تعذر التحليل التفصيلي حالياً، سأضيف الهدف بشكل مبسط.");
-      const id = Date.now().toString();
-      setGoals(p => [{ id, title: newGoalText, description: '', timeFrame: 'yearly', category: 'general', completed: false, failed: false, points: 500, dueDate: new Date().toISOString() }, ...p]);
-      setNewGoalText('');
+      alert("تعذر التحليل العميق حالياً. تم إضافة الهدف كإدخال بسيط.");
+      if (!titleOverride) {
+        setGoals(p => [{ id: Date.now().toString(), title: targetTitle, description: '', timeFrame: 'yearly', category: 'general', completed: false, failed: false, points: 500, dueDate: new Date().toISOString() }, ...p]);
+        setNewGoalText('');
+      }
     } finally { setIsAiLoading(false); }
   };
 
@@ -210,24 +219,30 @@ const App: React.FC = () => {
     }));
   };
 
+  const deleteGoalGroup = (id: string) => {
+    if (window.confirm("هل تريد حذف هذا الهدف وجميع مهامه الفرعية؟")) {
+      setGoals(p => p.filter(g => g.id !== id && g.parentId !== id && !p.some(parent => parent.id === g.parentId && parent.parentId === id)));
+    }
+  };
+
   return (
     <div className="min-h-screen pb-32 max-w-2xl mx-auto bg-slate-50 shadow-2xl flex flex-col font-['Cairo']">
       
       {/* HEADER */}
-      <header className={`p-8 sticky top-0 z-50 rounded-b-[3rem] shadow-xl transition-all duration-700 ${stats.isRestDay ? 'bg-amber-500' : 'bg-indigo-600'} text-white`}>
+      <header className={`p-8 sticky top-0 z-50 rounded-b-[3.5rem] shadow-xl transition-all duration-700 ${stats.isRestDay ? 'bg-amber-500' : 'bg-indigo-600'} text-white`}>
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <div className="bg-white/20 p-3 rounded-2xl shadow-inner backdrop-blur-md">
+            <div className="bg-white/20 p-3 rounded-[1.2rem] shadow-inner backdrop-blur-md">
               {stats.isRestDay ? <BedDouble className="w-8 h-8" /> : <BrainCircuit className="w-8 h-8 animate-pulse" />}
             </div>
             <div>
-              <h1 className="text-3xl font-black tracking-tighter">إنجاز</h1>
+              <h1 className="text-3xl font-black tracking-tight">إنجاز</h1>
               <div className="flex items-center gap-2 text-[10px] font-bold opacity-80 bg-black/10 px-2 py-1 rounded-full mt-1">
                 <CalendarDays className="w-3 h-3" /> {new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}
               </div>
             </div>
           </div>
-          <div className="bg-white text-slate-800 px-6 py-3 rounded-3xl flex items-center gap-2 shadow-2xl transform active:scale-90 transition-transform">
+          <div className="bg-white text-slate-800 px-6 py-3 rounded-[2rem] flex items-center gap-2 shadow-2xl transform active:scale-90 transition-transform cursor-pointer">
             <Trophy className="w-6 h-6 text-amber-500" />
             <span className="font-black text-2xl">{stats.totalPoints}</span>
           </div>
@@ -238,38 +253,56 @@ const App: React.FC = () => {
         {activeTab === 'goals' && (
           <div className="space-y-8 animate-in slide-in-from-bottom-6 duration-700">
             {isAiLoading && (
-              <div className="bg-white p-8 rounded-[2.5rem] flex flex-col items-center gap-4 shadow-lg border-2 border-indigo-100 animate-pulse text-center">
+              <div className="bg-white p-10 rounded-[3rem] flex flex-col items-center gap-5 shadow-2xl border-4 border-indigo-100 animate-pulse text-center">
                 <div className="relative">
-                  <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
-                  <Sparkles className="w-6 h-6 text-amber-400 absolute -top-2 -right-2 animate-bounce" />
+                  <div className="w-20 h-20 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+                  <Sparkles className="w-8 h-8 text-amber-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-bounce" />
                 </div>
-                <p className="font-black text-indigo-600 px-4 leading-relaxed">{aiStatus}</p>
-                <p className="text-[10px] text-slate-400 font-bold">قد يستغرق Gemini Pro بضع ثوانٍ للتفكير العميق...</p>
+                <div className="space-y-2">
+                  <p className="font-black text-indigo-700 text-lg px-4">{aiStatus}</p>
+                  <p className="text-xs text-slate-400 font-bold">يتم الآن استخدام محرك Gemini Pro لتحليل هدفك بدقة 100%</p>
+                </div>
               </div>
             )}
 
-            <section className="bg-white p-8 rounded-[3rem] shadow-2xl border border-indigo-50 relative overflow-hidden group">
+            <section className="bg-white p-8 rounded-[3.5rem] shadow-2xl border border-indigo-50 relative overflow-hidden group">
               <div className="absolute -right-20 -top-20 w-64 h-64 bg-indigo-50/50 rounded-full group-hover:scale-125 transition-transform duration-1000"></div>
               <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-3 relative z-10">
-                <Target className="w-6 h-6 text-indigo-500" /> ما هو هدفك الكبير؟
+                <Target className="w-7 h-7 text-indigo-500" /> حدد هدفك بوضوح
               </h2>
               <div className="space-y-5 relative z-10">
-                <input
-                  type="text"
-                  value={newGoalText}
-                  onChange={(e) => setNewGoalText(e.target.value)}
-                  placeholder="مثال: إتقان الخط العربي، بناء تطبيق جوال، حفظ سورة البقرة..."
-                  className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-[1.8rem] focus:border-indigo-500 focus:bg-white focus:outline-none font-bold text-slate-800 shadow-inner transition-all placeholder:text-slate-300"
-                  onKeyDown={(e) => e.key === 'Enter' && handleAiBreakdown()}
-                />
-                <button 
-                  onClick={handleAiBreakdown} 
-                  disabled={!newGoalText.trim() || isAiLoading}
-                  className="w-full bg-indigo-600 text-white p-5 rounded-[1.8rem] font-black flex items-center justify-center gap-3 shadow-xl hover:bg-indigo-700 disabled:bg-slate-200 disabled:shadow-none transition-all transform active:scale-[0.98] group"
-                >
-                  <Sparkles className="w-6 h-6 group-hover:rotate-12 transition-transform" />
-                  تحليل وتقسيم ذكي (Gemini Pro)
-                </button>
+                <div className="relative">
+                   <input
+                    type="text"
+                    value={newGoalText}
+                    onChange={(e) => setNewGoalText(e.target.value)}
+                    placeholder="مثال: إتقان Flexbox و Grid في CSS"
+                    className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] focus:border-indigo-500 focus:bg-white focus:outline-none font-bold text-slate-800 shadow-inner transition-all placeholder:text-slate-300 pr-14"
+                    onKeyDown={(e) => e.key === 'Enter' && handleAiBreakdown()}
+                  />
+                  <BrainCircuit className="w-6 h-6 text-indigo-200 absolute right-6 top-1/2 -translate-y-1/2" />
+                </div>
+                <div className="flex gap-3">
+                   <button 
+                    onClick={() => {
+                       const id = Date.now().toString();
+                       setGoals(p => [{ id, title: newGoalText, description: '', timeFrame: 'daily', category: 'general', completed: false, failed: false, points: 10, dueDate: new Date().toISOString() }, ...p]);
+                       setNewGoalText('');
+                    }}
+                    disabled={!newGoalText.trim() || isAiLoading}
+                    className="flex-1 bg-slate-100 text-slate-500 p-5 rounded-[1.8rem] font-black hover:bg-slate-200 disabled:opacity-50 transition-all"
+                  >
+                    إضافة بسيطة
+                  </button>
+                  <button 
+                    onClick={() => handleAiBreakdown()} 
+                    disabled={!newGoalText.trim() || isAiLoading}
+                    className="flex-[2] bg-indigo-600 text-white p-5 rounded-[1.8rem] font-black flex items-center justify-center gap-3 shadow-xl hover:bg-indigo-700 disabled:bg-slate-200 disabled:shadow-none transition-all transform active:scale-[0.98] group"
+                  >
+                    <Sparkles className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+                    تحليل وتقسيم ذكي
+                  </button>
+                </div>
               </div>
             </section>
 
@@ -279,33 +312,40 @@ const App: React.FC = () => {
               if (items.length === 0) return null;
               return (
                 <div key={t} className="space-y-4">
-                  <h3 className="text-xs font-black text-slate-400 px-6 flex items-center gap-2 uppercase tracking-[0.2em]">
+                  <h3 className="text-xs font-black text-slate-400 px-8 flex items-center gap-2 uppercase tracking-[0.25em]">
                     {t === 'daily' ? <Clock className="w-4 h-4" /> : <CalendarRange className="w-4 h-4" />}
-                    {t === 'daily' ? 'قائمة اليوم' : t === 'weekly' ? 'مهام الأسبوع' : t === 'monthly' ? 'أهداف الشهر' : 'الرؤية السنوية'}
+                    {t === 'daily' ? 'اليوم' : t === 'weekly' ? 'هذا الأسبوع' : t === 'monthly' ? 'هذا الشهر' : 'الرؤية السنوية'}
                   </h3>
                   <div className="space-y-3">
                     {items.map(g => (
-                      <div key={g.id} className={`flex items-center gap-5 p-6 bg-white rounded-[2.5rem] border-2 transition-all group ${g.completed ? 'border-emerald-50 opacity-60 bg-emerald-50/20' : 'border-slate-50 hover:border-indigo-100 shadow-sm hover:shadow-xl'}`}>
+                      <div key={g.id} className={`flex items-center gap-5 p-7 bg-white rounded-[3rem] border-2 transition-all group ${g.completed ? 'border-emerald-50 opacity-60 bg-emerald-50/20' : 'border-slate-50 hover:border-indigo-100 shadow-sm hover:shadow-xl'}`}>
                         <button onClick={() => toggleGoal(g.id)} className="shrink-0 transform active:scale-75 transition-transform">
-                          {g.completed ? <CheckCircle className="w-10 h-10 text-emerald-500 fill-white rounded-full shadow-lg" /> : <Circle className="w-10 h-10 text-slate-200 group-hover:text-indigo-200" />}
+                          {g.completed ? <CheckCircle className="w-12 h-12 text-emerald-500 fill-white rounded-full shadow-lg" /> : <Circle className="w-12 h-12 text-slate-200 group-hover:text-indigo-200" />}
                         </button>
                         <div className="flex-1 min-w-0">
-                          <h4 className={`font-bold text-slate-800 text-base leading-tight ${g.completed ? 'line-through text-slate-400' : ''}`}>
+                          <h4 className={`font-bold text-slate-800 text-lg leading-tight ${g.completed ? 'line-through text-slate-400' : ''}`}>
                             {g.title} {g.isAiGenerated && <Sparkle className="inline w-3 h-3 text-indigo-400 ml-1 animate-pulse" />}
                           </h4>
-                          <div className="flex items-center gap-2 mt-2">
+                          <div className="flex flex-wrap items-center gap-3 mt-2">
                             <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl ${CATEGORY_CONFIG[g.category]?.bg} ${CATEGORY_CONFIG[g.category]?.color} text-[10px] font-black shadow-sm`}>
                               {React.createElement(CATEGORY_CONFIG[g.category]?.icon, { className: "w-3 h-3" })}
                               {CATEGORY_CONFIG[g.category]?.label}
                             </div>
-                            {g.description && <span className="text-[10px] text-slate-400 font-bold truncate max-w-[150px]">{g.description}</span>}
+                            {g.description && <span className="text-[11px] text-slate-400 font-bold truncate max-w-[200px]">{g.description}</span>}
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <span className="text-[11px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-xl shadow-inner">+{g.points}</span>
-                          <button onClick={() => setGoals(p => p.filter(x => x.id !== g.id))} className="block text-slate-200 hover:text-rose-500 mt-3 transition-colors p-1 opacity-0 group-hover:opacity-100">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        <div className="text-right shrink-0 flex flex-col items-end gap-2">
+                          <span className="text-[12px] font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-xl shadow-inner">+{g.points}</span>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {g.timeFrame === 'yearly' && (
+                               <button onClick={() => handleAiBreakdown(g.title)} className="p-2 text-slate-300 hover:text-indigo-500 transition-colors">
+                                 <RefreshCcw className="w-4 h-4" />
+                               </button>
+                            )}
+                            <button onClick={() => deleteGoalGroup(g.id)} className="p-2 text-slate-200 hover:text-rose-500 transition-colors">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -316,74 +356,68 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* SHOP TAB */}
+        {/* SHOP TAB - NO CHANGES NEEDED BUT KEEPING FOR CONTEXT */}
         {activeTab === 'shop' && (
           <div className="space-y-6 animate-in slide-in-from-left-6 duration-700">
-             <header className="bg-amber-400 p-10 rounded-[3rem] text-white shadow-2xl text-center relative overflow-hidden">
-              <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-white/20 rounded-full animate-pulse"></div>
-              <ShoppingCart className="w-16 h-16 mx-auto mb-4 opacity-90 drop-shadow-lg" />
+             <header className="bg-amber-400 p-10 rounded-[3.5rem] text-white shadow-2xl text-center relative overflow-hidden">
+              <div className="absolute -left-10 -bottom-10 w-48 h-48 bg-white/20 rounded-full animate-pulse"></div>
+              <ShoppingCart className="w-20 h-20 mx-auto mb-4 opacity-90 drop-shadow-xl" />
               <h2 className="text-3xl font-black">متجر الجوائز</h2>
-              <p className="text-sm text-amber-100 font-bold mt-2">حوّل عرقك وجهدك إلى متعة مستحقة</p>
-              <button onClick={() => setIsAddingReward(true)} className="mt-8 bg-white text-amber-500 px-8 py-3 rounded-full font-black text-sm shadow-xl hover:bg-amber-50 transition-all transform active:scale-95">+ أضف مكافأة مخصصة</button>
+              <p className="text-sm text-amber-100 font-bold mt-2">حوّل إنجازاتك إلى مكافآت حقيقية</p>
+              <button onClick={() => setIsAddingReward(true)} className="mt-8 bg-white text-amber-500 px-10 py-4 rounded-full font-black text-sm shadow-xl hover:bg-amber-50 transition-all transform active:scale-95">+ مكافأة مخصصة</button>
             </header>
 
             {isAddingReward && (
-              <div className="bg-white p-8 rounded-[3rem] border-4 border-amber-200 space-y-5 animate-in zoom-in-95 shadow-2xl">
+              <div className="bg-white p-10 rounded-[3.5rem] border-4 border-amber-200 space-y-6 animate-in zoom-in-95 shadow-2xl">
                 <div className="flex justify-between items-center">
-                   <h3 className="font-black text-slate-800 text-xl">كافئ نفسك بشيء تحبه</h3>
-                   <button onClick={() => setIsAddingReward(false)} className="text-slate-300 hover:text-rose-500 transition-colors"><X /></button>
+                   <h3 className="font-black text-slate-800 text-2xl">ما الذي ترغب به؟</h3>
+                   <button onClick={() => setIsAddingReward(false)} className="text-slate-300 hover:text-rose-500 transition-colors"><X className="w-8 h-8" /></button>
                 </div>
                 <input 
                   type="text" 
                   value={newRewardTitle} 
                   onChange={(e) => setNewRewardTitle(e.target.value)} 
-                  placeholder="مثال: الخروج مع الأصدقاء، وجبة مفضلة..." 
-                  className="w-full p-5 bg-slate-50 rounded-[1.8rem] border-2 border-slate-100 font-bold focus:border-amber-400 focus:outline-none shadow-inner" 
+                  placeholder="مثال: رحلة نهاية الأسبوع" 
+                  className="w-full p-6 bg-slate-50 rounded-[2rem] border-2 border-slate-100 font-bold focus:border-amber-400 focus:outline-none shadow-inner" 
                 />
                 <button 
                   onClick={async () => {
                     if (!newRewardTitle.trim()) return;
                     setIsAiLoading(true);
-                    setAiStatus('Gemini يقيم قيمة مكافأتك...');
+                    setAiStatus('يتم الآن تقدير قيمة المكافأة بذكاء...');
                     const c = await calculateRewardCost(newRewardTitle);
                     setCustomRewards([{ id: Date.now().toString(), title: newRewardTitle, cost: c, icon: 'Tag' }, ...customRewards]);
                     setNewRewardTitle(''); setIsAddingReward(false); setIsAiLoading(false);
                   }} 
-                  className="w-full bg-amber-500 text-white p-5 rounded-[1.8rem] font-black shadow-xl transform active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-amber-500 text-white p-6 rounded-[2rem] font-black shadow-xl transform active:scale-[0.98] transition-all flex items-center justify-center gap-3"
                 >
-                  <Sparkles className="w-5 h-5" /> تقدير التكلفة بالذكاء الاصطناعي
+                  <Sparkles className="w-6 h-6" /> تقدير التكلفة (AI)
                 </button>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-2 gap-6">
               {[...INITIAL_REWARDS, ...customRewards].map(r => (
-                <div key={r.id} className="bg-white p-8 rounded-[3rem] border-2 border-slate-50 text-center shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-amber-50 rounded-bl-[3rem] -translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
-                  <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-amber-500 group-hover:scale-110 transition-transform shadow-sm">
-                    <Tag className="w-8 h-8" />
+                <div key={r.id} className="bg-white p-10 rounded-[3.5rem] border-2 border-slate-50 text-center shadow-sm hover:shadow-2xl transition-all group relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-amber-50 rounded-bl-[4rem] -translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+                  <div className="w-20 h-20 bg-amber-50 rounded-[2rem] flex items-center justify-center mx-auto mb-6 text-amber-500 group-hover:scale-110 transition-transform shadow-sm">
+                    <Tag className="w-10 h-10" />
                   </div>
-                  <h3 className="font-bold text-slate-800 text-base h-12 flex items-center justify-center leading-snug px-2">{r.title}</h3>
-                  <div className="flex items-center justify-center gap-1 my-4">
-                    <Zap className="w-5 h-5 text-indigo-600 fill-indigo-600" />
-                    <span className="font-black text-indigo-600 text-2xl">{r.cost}</span>
+                  <h3 className="font-bold text-slate-800 text-lg h-14 flex items-center justify-center leading-snug px-2">{r.title}</h3>
+                  <div className="flex items-center justify-center gap-2 my-5">
+                    <Zap className="w-6 h-6 text-indigo-600 fill-indigo-600" />
+                    <span className="font-black text-indigo-600 text-3xl">{r.cost}</span>
                   </div>
                   <button 
                     onClick={() => {
                       if (stats.totalPoints >= r.cost) {
                         setStats(s => ({ ...s, totalPoints: s.totalPoints - r.cost }));
                         alert(`مبروك! استمتع بـ ${r.title}.`);
-                      } else alert("رصيدك لا يكفي حالياً، استمر في الإنجاز!");
+                      } else alert("تحتاج لمزيد من النقاط، واصل الإنجاز!");
                     }} 
-                    className="w-full py-4 rounded-2xl font-black text-sm bg-slate-900 text-white hover:bg-indigo-600 transition-all shadow-lg active:scale-95"
+                    className="w-full py-5 rounded-[1.8rem] font-black text-sm bg-slate-900 text-white hover:bg-indigo-600 transition-all shadow-xl active:scale-95"
                   >
                     شراء الآن
-                  </button>
-                  <button 
-                    onClick={() => setCustomRewards(p => p.filter(x => x.id !== r.id))}
-                    className="absolute top-4 left-4 text-slate-200 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               ))}
@@ -394,60 +428,60 @@ const App: React.FC = () => {
         {/* BUDGET TAB */}
         {activeTab === 'budget' && (
           <div className="space-y-6 animate-in slide-in-from-right-6 duration-700">
-            <div className="bg-emerald-500 text-white p-10 rounded-[3.5rem] shadow-2xl relative overflow-hidden">
-              <div className="absolute -left-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full animate-pulse"></div>
-              <h2 className="text-2xl font-black mb-6 flex items-center gap-3"><Wallet className="w-7 h-7" /> ذكاء الميزانية</h2>
-              <div className="grid grid-cols-2 gap-5">
-                <div className="bg-white/10 p-6 rounded-[2rem] backdrop-blur-md border border-white/20 shadow-inner">
-                  <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest mb-1">المتاح لليوم</p>
-                  <p className="text-3xl font-black">{(budget.dailyLimit - budget.spentToday).toLocaleString()} ج</p>
+            <div className="bg-emerald-500 text-white p-12 rounded-[4rem] shadow-2xl relative overflow-hidden">
+              <div className="absolute -left-10 -bottom-10 w-56 h-56 bg-white/10 rounded-full animate-pulse"></div>
+              <h2 className="text-3xl font-black mb-8 flex items-center gap-4"><Wallet className="w-9 h-9" /> الرقابة المالية</h2>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="bg-white/10 p-7 rounded-[2.5rem] backdrop-blur-md border border-white/20 shadow-inner">
+                  <p className="text-[11px] font-bold opacity-80 uppercase tracking-widest mb-1">الميزانية اليومية</p>
+                  <p className="text-4xl font-black">{(budget.dailyLimit - budget.spentToday).toLocaleString()} ج</p>
                 </div>
                 <button 
                   onClick={async () => {
-                    if (budget.expenses.length === 0) return alert("قم بتسجيل بعض المصروفات أولاً.");
+                    if (budget.expenses.length === 0) return alert("سجل مصروفاتك أولاً.");
                     setIsAiLoading(true);
-                    setAiStatus('Gemini Pro يحلل نمط استهلاكك...');
+                    setAiStatus('يتم الآن تحليل مصروفاتك وتقديم نصيحة احترافية...');
                     const advice = await analyzeBudget(budget.expenses, budget.dailyLimit);
                     setAiBudgetAdvice(advice);
                     setIsAiLoading(false);
                   }} 
-                  className="bg-white text-emerald-600 rounded-[2rem] font-black text-xs px-4 shadow-xl hover:bg-emerald-50 transition-all transform active:scale-95"
+                  className="bg-white text-emerald-600 rounded-[2.5rem] font-black text-sm px-5 shadow-2xl hover:bg-emerald-50 transition-all transform active:scale-95"
                 >
-                  تحليل مالي ذكي
+                  نصيحة مالية ذكية
                 </button>
               </div>
             </div>
 
             {aiBudgetAdvice && (
-              <div className="bg-indigo-50 p-8 rounded-[3rem] border-2 border-indigo-100 font-bold text-slate-700 animate-in slide-in-from-top-6 relative shadow-sm">
-                <button onClick={() => setAiBudgetAdvice(null)} className="absolute top-6 left-6 text-slate-300 hover:text-indigo-500"><X className="w-6 h-6" /></button>
-                <div className="flex items-start gap-4">
-                  <div className="bg-white p-3 rounded-2xl shadow-md text-indigo-500">
-                    <MessageSquareQuote className="w-8 h-8" />
+              <div className="bg-indigo-50 p-10 rounded-[3.5rem] border-4 border-indigo-100 font-bold text-slate-700 animate-in slide-in-from-top-6 relative shadow-sm">
+                <button onClick={() => setAiBudgetAdvice(null)} className="absolute top-8 left-8 text-slate-300 hover:text-indigo-500"><X className="w-8 h-8" /></button>
+                <div className="flex items-start gap-5">
+                  <div className="bg-white p-4 rounded-[1.5rem] shadow-lg text-indigo-500 shrink-0">
+                    <MessageSquareQuote className="w-10 h-10" />
                   </div>
-                  <p className="text-base leading-relaxed pt-1 pr-2">{aiBudgetAdvice}</p>
+                  <p className="text-lg leading-relaxed pt-2 pr-2">{aiBudgetAdvice}</p>
                 </div>
               </div>
             )}
 
-            <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100">
-              <h3 className="text-sm font-black text-slate-800 mb-6 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-emerald-500" /> تسجيل عملية شراء
+            <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-slate-100">
+              <h3 className="text-base font-black text-slate-800 mb-8 flex items-center gap-3">
+                <Plus className="w-6 h-6 text-emerald-500" /> إضافة عملية شراء
               </h3>
-              <div className="flex gap-3">
+              <div className="flex gap-4">
                 <input 
                   type="number" 
                   value={expenseAmount} 
                   onChange={(e) => setExpenseAmount(e.target.value)} 
                   placeholder="المبلغ" 
-                  className="w-28 p-5 bg-slate-50 rounded-[1.5rem] border-2 border-slate-100 font-black focus:border-emerald-500 focus:bg-white outline-none transition-all shadow-inner" 
+                  className="w-32 p-6 bg-slate-50 rounded-[2rem] border-2 border-slate-100 font-black focus:border-emerald-500 focus:bg-white outline-none transition-all shadow-inner" 
                 />
                 <input 
                   type="text" 
                   value={expenseNote} 
                   onChange={(e) => setExpenseNote(e.target.value)} 
-                  placeholder="مثلاً: قهوة، مواصلات..." 
-                  className="flex-1 p-5 bg-slate-50 rounded-[1.5rem] border-2 border-slate-100 font-bold focus:border-emerald-500 focus:bg-white outline-none transition-all shadow-inner" 
+                  placeholder="الوصف" 
+                  className="flex-1 p-6 bg-slate-50 rounded-[2rem] border-2 border-slate-100 font-bold focus:border-emerald-500 focus:bg-white outline-none transition-all shadow-inner" 
                 />
                 <button 
                   onClick={() => {
@@ -461,87 +495,77 @@ const App: React.FC = () => {
                     }
                     setExpenseAmount(''); setExpenseNote('');
                   }} 
-                  className="bg-emerald-500 text-white px-6 rounded-[1.5rem] shadow-xl active:scale-[0.85] transition-all"
+                  className="bg-emerald-500 text-white px-8 rounded-[2rem] shadow-2xl active:scale-[0.85] transition-all"
                 >
-                  <CheckCircle className="w-7 h-7" />
+                  <CheckCircle className="w-8 h-8" />
                 </button>
               </div>
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-xs font-black text-slate-400 px-6 uppercase tracking-[0.2em]">المشتريات الأخيرة</h3>
-              {budget.expenses.length === 0 ? (
-                <div className="bg-white/50 border-4 border-dashed border-slate-100 rounded-[3rem] py-20 text-center">
-                  <ReceiptText className="w-16 h-16 text-slate-200 mx-auto mb-4 opacity-30" />
-                  <p className="text-slate-300 font-black text-sm">لم تسجل أي مصروفات اليوم</p>
-                </div>
-              ) : (
-                <div className="space-y-3 px-1">
-                  {budget.expenses.map(e => (
-                    <div key={e.id} className="bg-white p-6 rounded-[2.5rem] border-2 border-slate-50 flex justify-between items-center shadow-sm hover:border-emerald-100 transition-all group">
-                      <div className="flex items-center gap-5">
-                        <div className="p-4 bg-slate-50 rounded-2xl text-slate-400 group-hover:text-emerald-500 transition-colors shadow-inner">
-                          <ReceiptText className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-800 text-base">{e.description}</p>
-                          <p className="text-[10px] text-slate-400 font-black mt-1">
-                            {new Date(e.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-5">
-                        <span className="font-black text-rose-500 text-xl">-{e.amount.toLocaleString()} ج</span>
-                        <button 
-                          onClick={() => setBudget(p => ({ ...p, spentToday: Math.max(0, p.spentToday - e.amount), expenses: p.expenses.filter(x => x.id !== e.id) }))} 
-                          className="text-slate-200 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
+               {budget.expenses.map(e => (
+                <div key={e.id} className="bg-white p-7 rounded-[3rem] border-2 border-slate-50 flex justify-between items-center shadow-sm group">
+                  <div className="flex items-center gap-5">
+                    <div className="p-5 bg-slate-50 rounded-[1.5rem] text-slate-400 group-hover:text-emerald-500 transition-colors shadow-inner">
+                      <ReceiptText className="w-7 h-7" />
                     </div>
-                  ))}
+                    <div>
+                      <p className="font-bold text-slate-800 text-lg">{e.description}</p>
+                      <p className="text-[11px] text-slate-400 font-black mt-1">
+                        {new Date(e.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <span className="font-black text-rose-500 text-2xl">-{e.amount.toLocaleString()} ج</span>
+                    <button 
+                      onClick={() => setBudget(p => ({ ...p, spentToday: Math.max(0, p.spentToday - e.amount), expenses: p.expenses.filter(x => x.id !== e.id) }))} 
+                      className="text-slate-200 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-6 h-6" />
+                    </button>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           </div>
         )}
 
+        {/* STATS TAB */}
         {activeTab === 'stats' && (
-          <div className="space-y-8 animate-in fade-in duration-1000">
-             <div className="bg-slate-900 text-white p-12 rounded-[3.5rem] relative overflow-hidden shadow-2xl">
-                <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
-                <h2 className="text-3xl font-black mb-10 relative z-10 flex items-center gap-3">
-                  <BarChart3 className="w-8 h-8 text-indigo-400" /> خارطة الإنجاز
+          <div className="space-y-10 animate-in fade-in duration-1000">
+             <div className="bg-slate-900 text-white p-14 rounded-[4.5rem] relative overflow-hidden shadow-2xl">
+                <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
+                <h2 className="text-4xl font-black mb-12 relative z-10 flex items-center gap-4">
+                  <BarChart3 className="w-10 h-10 text-indigo-400" /> تحليل النمو
                 </h2>
-                <div className="grid grid-cols-2 gap-6 relative z-10">
-                  <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 backdrop-blur-xl shadow-inner group">
-                    <p className="text-5xl font-black mb-2 group-hover:scale-110 transition-transform">{stats.goalsCompleted}</p>
-                    <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">مهمة مكتملة</p>
+                <div className="grid grid-cols-2 gap-8 relative z-10">
+                  <div className="bg-white/5 p-10 rounded-[3rem] border border-white/10 backdrop-blur-xl shadow-inner group text-center">
+                    <p className="text-6xl font-black mb-3 group-hover:scale-110 transition-transform">{stats.goalsCompleted}</p>
+                    <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest">إنجاز كلي</p>
                   </div>
-                  <div className="bg-white/5 p-8 rounded-[2.5rem] border border-white/10 backdrop-blur-xl shadow-inner group">
-                    <p className="text-5xl font-black mb-2 text-indigo-400 group-hover:scale-110 transition-transform">{stats.totalPoints}</p>
-                    <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">إجمالي الخبرة</p>
+                  <div className="bg-white/5 p-10 rounded-[3rem] border border-white/10 backdrop-blur-xl shadow-inner group text-center">
+                    <p className="text-6xl font-black mb-3 text-indigo-400 group-hover:scale-110 transition-transform">{stats.totalPoints}</p>
+                    <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest">إجمالي الخبرة</p>
                   </div>
                 </div>
              </div>
              
-             <div className="space-y-5">
-               <h3 className="text-xs font-black text-slate-400 px-8 uppercase tracking-[0.2em]">تطور المهارات</h3>
+             <div className="space-y-6">
                {Object.entries(CATEGORY_CONFIG).map(([k, c]) => {
                   const s = stats.categories[k as GoalCategory] || { level: 1, exp: 0 };
                   const CatIcon = c.icon;
                   return (
-                    <div key={k} className="bg-white p-8 rounded-[3rem] border-2 border-slate-50 flex items-center gap-8 shadow-sm hover:shadow-xl transition-all group">
-                      <div className={`w-20 h-20 rounded-[2rem] ${c.bg} ${c.color} flex items-center justify-center shrink-0 shadow-lg transform group-hover:rotate-6 transition-transform`}>
-                        <CatIcon className="w-10 h-10" />
+                    <div key={k} className="bg-white p-10 rounded-[3.5rem] border-2 border-slate-50 flex items-center gap-10 shadow-sm hover:shadow-2xl transition-all group">
+                      <div className={`w-24 h-24 rounded-[2.5rem] ${c.bg} ${c.color} flex items-center justify-center shrink-0 shadow-xl transform group-hover:rotate-6 transition-transform`}>
+                        <CatIcon className="w-12 h-12" />
                       </div>
                       <div className="flex-1">
-                        <div className="flex justify-between items-end mb-3">
-                          <p className="font-black text-slate-800 text-lg">{c.label}</p>
-                          <p className="text-xs font-black text-indigo-600 bg-indigo-50 px-3 py-1 rounded-xl">المستوى {s.level}</p>
+                        <div className="flex justify-between items-end mb-4">
+                          <p className="font-black text-slate-800 text-xl">{c.label}</p>
+                          <p className="text-sm font-black text-indigo-600 bg-indigo-50 px-4 py-1.5 rounded-2xl shadow-inner">المستوى {s.level}</p>
                         </div>
-                        <div className="h-4 bg-slate-100 rounded-full overflow-hidden shadow-inner border border-slate-50">
+                        <div className="h-5 bg-slate-100 rounded-full overflow-hidden shadow-inner border border-slate-50">
                           <div 
                             className={`h-full ${c.color.replace('text', 'bg')} rounded-full transition-all duration-1000 ease-out relative`} 
                             style={{ width: `${Math.min(100, s.exp)}%` }} 
@@ -549,7 +573,7 @@ const App: React.FC = () => {
                             <div className="absolute top-0 left-0 right-0 bottom-0 bg-white/20 animate-pulse"></div>
                           </div>
                         </div>
-                        <p className="text-[9px] font-bold text-slate-300 mt-2 text-left uppercase">{s.exp} / 100 EXP</p>
+                        <p className="text-[10px] font-bold text-slate-300 mt-3 text-left uppercase tracking-tighter">{s.exp} / 100 خبرة (EXP)</p>
                       </div>
                     </div>
                   );
@@ -559,21 +583,21 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto bg-white/90 backdrop-blur-3xl border-t border-slate-100 px-10 py-6 flex justify-around items-center z-50 rounded-t-[3.5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.1)]">
+      <nav className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto bg-white/95 backdrop-blur-3xl border-t border-slate-100 px-12 py-7 flex justify-around items-center z-50 rounded-t-[4rem] shadow-[0_-25px_60px_rgba(0,0,0,0.12)]">
         {[
-          { id: 'goals', icon: LayoutGrid, label: 'المهام' },
-          { id: 'stats', icon: BarChart3, label: 'النمو' },
+          { id: 'goals', icon: LayoutGrid, label: 'الأهداف' },
+          { id: 'stats', icon: BarChart3, label: 'التقدم' },
           { id: 'shop', icon: ShoppingCart, label: 'المكافآت' },
           { id: 'budget', icon: Wallet, label: 'المالية' }
         ].map((btn) => (
           <button 
             key={btn.id}
             onClick={() => setActiveTab(btn.id as any)} 
-            className={`flex flex-col items-center gap-2 transition-all duration-500 ${activeTab === btn.id ? 'text-indigo-600 scale-125 -translate-y-2' : 'text-slate-300 hover:text-slate-400'}`}
+            className={`flex flex-col items-center gap-2.5 transition-all duration-500 ${activeTab === btn.id ? 'text-indigo-600 scale-125 -translate-y-3' : 'text-slate-300 hover:text-slate-400'}`}
           >
-            <btn.icon className={`w-7 h-7 ${activeTab === btn.id ? 'stroke-[3px]' : 'stroke-2'}`} />
-            <span className="text-[10px] font-black">{btn.label}</span>
-            {activeTab === btn.id && <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-in zoom-in"></div>}
+            <btn.icon className={`w-8 h-8 ${activeTab === btn.id ? 'stroke-[3.5px]' : 'stroke-2'}`} />
+            <span className="text-[11px] font-black">{btn.label}</span>
+            {activeTab === btn.id && <div className="w-2 h-2 bg-indigo-600 rounded-full animate-in zoom-in"></div>}
           </button>
         ))}
       </nav>

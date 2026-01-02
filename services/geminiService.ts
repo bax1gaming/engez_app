@@ -11,7 +11,7 @@ export const categorizeGoal = async (title: string, description: string): Promis
     const ai = getAi();
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `أنت مساعد ذكي. صنف الهدف التالي: "${title}" إلى واحدة من هذه الفئات حصراً: (religious, physical, academic, general). رد بالكلمة الإنجليزية فقط.`,
+      contents: `صنف هذا الهدف: "${title}" إلى فئة واحدة فقط: (religious, physical, academic, general). رد بالكلمة الإنجليزية فقط.`,
     });
     const category = response.text?.trim().toLowerCase() as GoalCategory;
     const valid: GoalCategory[] = ['religious', 'physical', 'academic', 'general'];
@@ -21,80 +21,84 @@ export const categorizeGoal = async (title: string, description: string): Promis
   }
 };
 
+/**
+ * يقوم هذا التابع بتحليل الهدف السنوي وتحويله إلى خطة عمل دقيقة.
+ * تم تحسينه ليكون "عدائياً" ضد القوالب الجاهزة.
+ */
 export const generateGoalBreakdown = async (yearlyGoal: string) => {
   try {
     const ai = getAi();
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
-      contents: `أنت خبير إنتاجية متخصص في التخطيط الاستراتيجي. 
-      المطلوب: تحليل الهدف السنوي التالي: "${yearlyGoal}" وتقديم خطة عمل مخصصة بالكامل.
+      contents: `أنت الآن خبير استراتيجي متخصص جداً في المجال المتعلق بهذا الهدف: "${yearlyGoal}".
 
-      شروط حاسمة:
-      1. يمنع منعاً باتاً استخدام عبارات عامة مثل "البحث"، "الاستعداد"، "التنفيذ"، "مراجعة النتائج".
-      2. يجب أن تكون جميع العناوين والمهام "مرتبطة تقنياً وعملياً" بطبيعة الهدف "${yearlyGoal}".
-      3. إذا كان الهدف "تعلم برمجة"، يجب أن تتحدث المهام عن لغات برمجة، بيئات تطوير، مشاريع برمجية.
-      4. إذا كان الهدف "حفظ قرآن"، يجب أن تتحدث المهام عن أجزاء، سور، مراجعة، تجويد.
-      5. قدم 3 مراحل شهرية، وكل مرحلة لها مهمتان أسبوعيتان "ملموستان جداً".
+المهمة المطلوبة:
+توليد خطة عمل "فريدة وحصرية" لهذا الهدف حصراً. لا تستخدم أي جمل عامة تصلح لأي هدف آخر.
 
-      رد بصيغة JSON فقط بالتنسيق التالي:
-      {
-        "category": "religious/physical/academic/general",
-        "monthlyGoals": [
-          {
-            "title": "عنوان فريد ومخصص جداً للمرحلة",
-            "description": "وصف دقيق لما سيتم فعله بخصوص ${yearlyGoal}",
-            "weeklySubGoals": [
-              "مهمة أسبوعية رقم 1 مخصصة وعملية",
-              "مهمة أسبوعية رقم 2 مخصصة وعملية"
-            ]
-          }
-        ],
-        "suggestedDailyTask": "مهمة يومية متناهية الصغر (Atomic Habit) تدعم الهدف مباشرة"
-      }`,
+القواعد الصارمة:
+1. إذا كان الهدف "تعلم CSS"، يجب أن تتحدث المهام عن (Selectors, Flexbox, Grid, Animations, Specificity).
+2. إذا كان الهدف "حفظ سورة البقرة"، يجب أن تتحدث المهام عن (أرباع، أثمان، مراجعة المتشابهات، ربط الآيات).
+3. يمنع منعاً باتاً استخدام كلمات مثل: "الاستعداد"، "البحث"، "التأسيس"، "البداية"، "الخاتمة"، "المراجعة العامة".
+4. يجب أن يكون كل عنوان "وصفاً فنياً" للمرحلة.
+5. المهام الأسبوعية يجب أن تكون خطوات تقنية/عملية يمكن تنفيذها فوراً.
+
+رد بصيغة JSON فقط بالتنسيق التالي:
+{
+  "category": "religious/physical/academic/general",
+  "monthlyGoals": [
+    {
+      "title": "عنوان فني تخصصي جداً للمرحلة الأولى",
+      "description": "ما هو الإنجاز النوعي الذي سيتحقق في ${yearlyGoal} خلال هذا الشهر؟",
+      "weeklySubGoals": [
+        "خطوة تنفيذية رقم 1 شديدة التحديد",
+        "خطوة تنفيذية رقم 2 شديدة التحديد"
+      ]
+    },
+    { "title": "...", "description": "...", "weeklySubGoals": ["...", "..."] },
+    { "title": "...", "description": "...", "weeklySubGoals": ["...", "..."] }
+  ],
+  "suggestedDailyTask": "عادة ذرية يومية (Habit) مرتبطة تقنياً بالهدف"
+}`,
       config: {
         responseMimeType: "application/json",
-        thinkingConfig: { thinkingBudget: 12000 }
+        thinkingConfig: { thinkingBudget: 15000 } // ميزانية تفكير عالية جداً لضمان عدم التكرار
       }
     });
 
     const text = response.text?.trim();
-    if (!text) throw new Error("استجابة فارغة");
+    if (!text) throw new Error("Empty AI Response");
 
-    // تنظيف JSON بشكل احترافي للتعامل مع أي زوائد من الموديل
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const cleanJson = jsonMatch ? jsonMatch[0] : text;
-    
-    const parsed = JSON.parse(cleanJson);
-    
-    // التحقق من أن الموديل لم يعطنا نتائج عامة (بفحص الكلمات الشائعة في القوالب الثابتة)
-    const genericWords = ["مرحلة 1", "الاستعداد", "البحث", "استكشاف"];
-    const isGeneric = parsed.monthlyGoals?.some((m: any) => 
-      genericWords.some(word => m.title.includes(word))
-    );
+    // تنظيف JSON من أي علامات Markdown قد يضيفها الموديل
+    const jsonStr = text.match(/\{[\s\S]*\}/)?.[0] || text;
+    const result = JSON.parse(jsonStr);
 
-    if (isGeneric && !yearlyGoal.includes("بحث")) {
-      console.warn("AI returned potentially generic content, but returning it anyway as fallback might be worse.");
+    // التحقق من صحة البيانات
+    if (!result.monthlyGoals || result.monthlyGoals.length < 1) {
+      throw new Error("Invalid structure returned");
     }
 
-    return parsed;
+    return result;
   } catch (e) {
-    console.error("خطأ في التحليل الذكي، جاري المحاكاة الديناميكية بناءً على المدخلات:", e);
-    // نظام احتياطي "ذكي" يدمج كلمات المستخدم لضمان الخصوصية حتى في حال الفشل
+    console.error("AI Error:", e);
+    // نظام احتياطي ديناميكي يقوم بصياغة المهام بناءً على اسم الهدف لمنع القوالب الثابتة
+    const keywords = yearlyGoal.split(' ');
+    const mainKey = keywords.length > 1 ? keywords[keywords.length - 1] : yearlyGoal;
+    
     return {
       category: "general",
       monthlyGoals: [
         { 
-          title: `إتقان أساسيات ${yearlyGoal}`, 
-          description: `التركيز على بناء حجر الأساس في ${yearlyGoal} وتوفير المتطلبات التقنية والبدنية والذهنية اللازمة للبدء.`, 
-          weeklySubGoals: [`إعداد جدول زمني خاص بـ ${yearlyGoal}`, `تحديد أول خطوة عملية في ${yearlyGoal} وتنفيذها`] 
+          title: `بناء القاعدة الصلبة لـ ${yearlyGoal}`, 
+          description: `التركيز على الأدوات الأساسية والمهارات الأولية الضرورية لنجاح ${yearlyGoal}.`, 
+          weeklySubGoals: [`تطبيق عملي على أول فصل في ${mainKey}`, `إعداد بيئة العمل الخاصة بـ ${yearlyGoal}`] 
         },
         { 
-          title: `التوسع في ممارسة ${yearlyGoal}`, 
-          description: `الانتقال إلى مرحلة التطبيق المتقدم لـ ${yearlyGoal} وقياس النتائج الملموسة.`, 
-          weeklySubGoals: [`تجاوز أول عقبة حقيقية في ${yearlyGoal}`, `تحقيق إنجاز بنسبة 40% في ${yearlyGoal}`] 
+          title: `تعميق ممارسة ${yearlyGoal}`, 
+          description: `الوصول إلى مستوى متوسط عبر ممارسة ${mainKey} بشكل يومي ومكثف.`, 
+          weeklySubGoals: [`إنجاز مشروع صغير يعتمد على ${mainKey}`, `حل 3 مشكلات معقدة في ${yearlyGoal}`] 
         }
       ],
-      suggestedDailyTask: `تخصيص 20 دقيقة للتركيز الكامل على ${yearlyGoal}`
+      suggestedDailyTask: `التدرب لمدة 15 دقيقة على ${mainKey}`
     };
   }
 };
@@ -103,17 +107,14 @@ export const generateDailyTasksForProgress = async (yearlyGoals: Goal[]) => {
   try {
     if (yearlyGoals.length === 0) return [];
     const ai = getAi();
-    const goalsContext = yearlyGoals.map(g => g.title).join(", ");
+    const context = yearlyGoals.map(g => g.title).join(", ");
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `بناءً على الأهداف السنوية الحالية: [${goalsContext}]، ما هما المهمتان الأكثر أهمية لإنجازهما اليوم لضمان التقدم؟
-      رد بـ JSON: { "tasks": [{ "title": "مهمة محددة جداً", "category": "الفئة" }] }`,
+      contents: `أهدافي الحالية: [${context}]. اقترح لي مهمتين (2) صغيرتين جداً للقيام بهما اليوم لضمان عدم التوقف.
+      رد بصيغة JSON: { "tasks": [{ "title": "اسم المهمة", "category": "الفئة" }] }`,
       config: { responseMimeType: "application/json" }
     });
-    const text = response.text?.trim() || "{}";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const cleanJson = jsonMatch ? jsonMatch[0] : text;
-    const data = JSON.parse(cleanJson);
+    const data = JSON.parse(response.text?.match(/\{[\s\S]*\}/)?.[0] || "{}");
     return data.tasks || [];
   } catch (e) {
     return [];
@@ -125,20 +126,20 @@ export const calculateRewardCost = async (rewardTitle: string): Promise<number> 
     const ai = getAi();
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `قيم تكلفة المكافأة التالية بالنقاط (بين 50 و 1500): "${rewardTitle}". رد برقم فقط.`,
+      contents: `كم نقطة تستحق هذه المكافأة: "${rewardTitle}"؟ (المدى 50-1500). رد برقم فقط.`,
     });
-    return parseInt(response.text?.replace(/[^0-9]/g, '') || "150");
-  } catch (e) { return 200; }
+    return parseInt(response.text?.replace(/[^0-9]/g, '') || "200");
+  } catch (e) { return 250; }
 };
 
 export const analyzeBudget = async (expenses: Expense[], dailyLimit: number): Promise<string> => {
   try {
     const ai = getAi();
-    const summary = expenses.map(e => `${e.description}: ${e.amount}ج`).join(", ");
+    const history = expenses.slice(0, 5).map(e => `${e.description}: ${e.amount}`).join(", ");
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `حلل المصروفات: [${summary}] بحد يومي ${dailyLimit}ج. أعط نصيحة مالية ذكية ومختصرة جداً بالعربية.`,
+      contents: `هذه مصروفاتي اليوم: [${history}]. الحد المسموح: ${dailyLimit}. أعطني نصيحة مالية قوية ومختصرة جداً بالعربية.`,
     });
-    return response.text || "وفر اليوم لتربح غداً!";
-  } catch (e) { return "حافظ على ميزانيتك!"; }
+    return response.text || "وفر اليوم لترتاح غداً!";
+  } catch (e) { return "راقب مصروفاتك!"; }
 };
