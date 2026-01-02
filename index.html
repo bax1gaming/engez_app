@@ -12,12 +12,21 @@
         font-family: 'Cairo', sans-serif;
         background-color: #f8fafc;
       }
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #e2e8f0;
+        border-radius: 10px;
+      }
     </style>
-    <!-- Shim process for browser environment BEFORE modules load -->
     <script>
       window.process = window.process || {};
       window.process.env = window.process.env || {};
-      window.process.env.API_KEY = ""; 
+      // Do not overwrite API_KEY if it's already provided by the environment
     </script>
   <script type="importmap">
 {
