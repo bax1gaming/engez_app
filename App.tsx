@@ -60,35 +60,44 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'goals' | 'shop' | 'budget' | 'stats'>('goals');
   const [isSaving, setIsSaving] = useState(false);
 
-  // State Persistence
+  // State Persistence with safe JSON parsing
   const [goals, setGoals] = useState<Goal[]>(() => {
-    const saved = localStorage.getItem('enjaz_goals');
-    let loadedGoals: Goal[] = saved ? JSON.parse(saved) : [];
-    const fixedIds = FIXED_DAILY_TASKS.map(t => t.id);
-    const existingFixedIds = loadedGoals.filter(g => fixedIds.includes(g.id)).map(g => g.id);
-    const missingFixed = FIXED_DAILY_TASKS.filter(f => !existingFixedIds.includes(f.id));
-    return [...missingFixed, ...loadedGoals];
+    try {
+      const saved = localStorage.getItem('enjaz_goals');
+      let loadedGoals: Goal[] = saved ? JSON.parse(saved) : [];
+      const fixedIds = FIXED_DAILY_TASKS.map(t => t.id);
+      const existingFixedIds = loadedGoals.filter(g => fixedIds.includes(g.id)).map(g => g.id);
+      const missingFixed = FIXED_DAILY_TASKS.filter(f => !existingFixedIds.includes(f.id));
+      return [...missingFixed, ...loadedGoals];
+    } catch (e) {
+      return FIXED_DAILY_TASKS;
+    }
   });
   
   const [customRewards, setCustomRewards] = useState<Reward[]>(() => {
-    const saved = localStorage.getItem('enjaz_custom_rewards');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('enjaz_custom_rewards');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
   });
   
   const [budget, setBudget] = useState<Budget>(() => {
-    const saved = localStorage.getItem('enjaz_budget');
-    return saved ? JSON.parse(saved) : { 
-      monthlyLimit: 2000, 
-      dailyLimit: 45, 
-      spentThisMonth: 0, 
-      spentToday: 0, 
-      rolloverBalance: 0,
-      expenses: [] 
-    };
+    try {
+      const saved = localStorage.getItem('enjaz_budget');
+      return saved ? JSON.parse(saved) : { 
+        monthlyLimit: 2000, 
+        dailyLimit: 45, 
+        spentThisMonth: 0, 
+        spentToday: 0, 
+        rolloverBalance: 0,
+        expenses: [] 
+      };
+    } catch (e) {
+      return { monthlyLimit: 2000, dailyLimit: 45, spentThisMonth: 0, spentToday: 0, rolloverBalance: 0, expenses: [] };
+    }
   });
   
   const [stats, setStats] = useState<UserStats>(() => {
-    const saved = localStorage.getItem('enjaz_stats');
     const defaultStats: UserStats = { 
       totalPoints: 100, 
       goalsCompleted: 0, 
@@ -101,10 +110,10 @@ const App: React.FC = () => {
         general: { level: 1, exp: 0 }
       }
     };
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { return defaultStats; }
-    }
-    return defaultStats;
+    try {
+      const saved = localStorage.getItem('enjaz_stats');
+      return saved ? JSON.parse(saved) : defaultStats;
+    } catch (e) { return defaultStats; }
   });
   
   const [newGoalText, setNewGoalText] = useState('');
@@ -127,7 +136,7 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [goals, customRewards, budget, stats]);
 
-  // Daily Reset
+  // Daily Reset Logic
   useEffect(() => {
     const todayStr = new Date().toDateString();
     if (lastResetDate !== todayStr) {
@@ -168,7 +177,7 @@ const App: React.FC = () => {
       const category = await categorizeGoal(title, "");
       setGoals(prev => prev.map(g => g.id === tempId ? { ...g, category } : g));
     } catch (e) {
-      console.error(e);
+      console.error("Categorization failed", e);
     } finally {
       setIsAiLoading(false);
     }
@@ -182,10 +191,11 @@ const App: React.FC = () => {
       if (breakdown) {
         const yearlyId = Date.now().toString();
         const mainCategory = breakdown.category as GoalCategory || 'general';
-        const yearly: Goal = {
+        
+        const yearlyGoal: Goal = {
           id: yearlyId,
           title: newGoalText,
-          description: 'تقسيم ذكي استراتيجي',
+          description: 'تحليل ذكي استراتيجي',
           timeFrame: 'yearly',
           category: mainCategory,
           completed: false,
@@ -195,10 +205,10 @@ const App: React.FC = () => {
         };
         
         const subGoals: Goal[] = [];
-        breakdown.monthlyGoals.forEach((m: any, idx: number) => {
-          const mid = `${yearlyId}-m-${idx}`;
+        breakdown.monthlyGoals.forEach((m: any, mIdx: number) => {
+          const mId = `${yearlyId}-m-${mIdx}`;
           subGoals.push({
-            id: mid,
+            id: mId,
             title: m.title,
             description: m.description,
             timeFrame: 'monthly',
@@ -209,9 +219,9 @@ const App: React.FC = () => {
             dueDate: new Date().toISOString(),
             isAiGenerated: true
           });
-          m.weeklySubGoals.forEach((w: string, widx: number) => {
+          m.weeklySubGoals.forEach((w: string, wIdx: number) => {
             subGoals.push({
-              id: `${mid}-w-${widx}`,
+              id: `${mId}-w-${wIdx}`,
               title: w,
               description: '',
               timeFrame: 'weekly',
@@ -224,12 +234,28 @@ const App: React.FC = () => {
             });
           });
         });
-        setGoals(prev => [yearly, ...subGoals, ...prev]);
+
+        if (breakdown.suggestedDailyTask) {
+          subGoals.push({
+            id: `${yearlyId}-d-daily`,
+            title: breakdown.suggestedDailyTask,
+            description: 'مهمة يومية مقترحة من الخطة',
+            timeFrame: 'daily',
+            category: mainCategory,
+            completed: false,
+            failed: false,
+            points: 10,
+            dueDate: new Date().toISOString(),
+            isAiGenerated: true
+          });
+        }
+
+        setGoals(prev => [yearlyGoal, ...subGoals, ...prev]);
         setNewGoalText('');
       }
     } catch (e) {
-      console.error(e);
-      alert("عذراً، حدث خطأ في التقسيم الذكي.");
+      console.error("Smart Breakdown UI Error", e);
+      alert("حدث خطأ في معالجة التقسيم الذكي. تم استخدام خطة مبدئية بدلاً من ذلك.");
     } finally {
       setIsAiLoading(false);
     }
@@ -237,7 +263,7 @@ const App: React.FC = () => {
 
   const handleSmartBudgetAnalysis = async () => {
     if (budget.expenses.length === 0) {
-      alert("سجل بعض المصروفات أولاً.");
+      alert("سجل مصروفات اليوم أولاً ليتمكن Gemini من تحليلها.");
       return;
     }
     setIsAiLoading(true);
@@ -246,6 +272,7 @@ const App: React.FC = () => {
       setAiBudgetAdvice(advice);
     } catch (e) {
       console.error(e);
+      setAiBudgetAdvice("حافظ على توازنك المالي!");
     } finally {
       setIsAiLoading(false);
     }
@@ -267,7 +294,7 @@ const App: React.FC = () => {
       setIsAddingReward(false);
     } catch (e) {
       console.error(e);
-      alert("تعذر حساب السعر.");
+      alert("تعذر حساب السعر بالذكاء الاصطناعي حالياً.");
     } finally {
       setIsAiLoading(false);
     }
@@ -333,6 +360,9 @@ const App: React.FC = () => {
         {activeTab === 'goals' && (
           <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
             <section className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-indigo-50 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                <Sparkles className="w-32 h-32 text-indigo-200" />
+              </div>
               <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-indigo-500" /> خطة جديدة
               </h2>
@@ -341,22 +371,23 @@ const App: React.FC = () => {
                   type="text"
                   value={newGoalText}
                   onChange={(e) => setNewGoalText(e.target.value)}
-                  placeholder="ماذا تريد أن تنجز؟"
-                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:outline-none font-bold"
+                  placeholder="ماذا تريد أن تنجز اليوم أو هذا العام؟"
+                  className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:outline-none font-bold text-slate-800 transition-all"
                   onKeyDown={(e) => e.key === 'Enter' && addGoal(newGoalText, 'daily')}
+                  disabled={isAiLoading}
                 />
                 <div className="flex gap-2">
                   <button 
                     onClick={() => addGoal(newGoalText, 'daily')} 
                     disabled={isAiLoading || !newGoalText.trim()}
-                    className="flex-1 bg-slate-100 text-slate-600 p-4 rounded-2xl font-black hover:bg-slate-200"
+                    className="flex-1 bg-slate-100 text-slate-600 p-4 rounded-2xl font-black hover:bg-slate-200 transition-all active:scale-95 disabled:opacity-50"
                   >
                     إضافة سريعة
                   </button>
                   <button 
                     onClick={handleAiBreakdown} 
                     disabled={isAiLoading || !newGoalText.trim()} 
-                    className="bg-indigo-600 text-white px-6 rounded-2xl font-black flex items-center gap-2"
+                    className="bg-indigo-600 text-white px-6 rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
                   >
                     {isAiLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Sparkles className="w-5 h-5" /> تقسيم ذكي</>}
                   </button>
@@ -364,6 +395,7 @@ const App: React.FC = () => {
               </div>
             </section>
 
+            {/* Task Lists Grouped by TimeFrame */}
             {['daily', 'weekly', 'monthly', 'yearly'].map((type) => {
               const filtered = goals.filter(g => g.timeFrame === type);
               if (filtered.length === 0) return null;
@@ -375,14 +407,14 @@ const App: React.FC = () => {
                   </h3>
                   <div className="space-y-2">
                     {filtered.map(goal => {
-                      const config = CATEGORY_CONFIG[goal.category];
+                      const config = CATEGORY_CONFIG[goal.category] || CATEGORY_CONFIG.general;
                       const Icon = config.icon;
                       return (
                         <div key={goal.id} className={`group flex items-center gap-4 p-4 bg-white rounded-[2rem] border-2 transition-all ${
                           goal.completed ? 'border-emerald-50 opacity-60 bg-emerald-50/20' : 'border-slate-50 hover:border-indigo-100'
                         }`}>
-                          <button onClick={() => toggleGoal(goal.id)} className="shrink-0">
-                            {goal.completed ? <CheckCircle className="w-8 h-8 text-emerald-500 fill-white rounded-full" /> : <Circle className="w-8 h-8 text-slate-200" />}
+                          <button onClick={() => toggleGoal(goal.id)} className="shrink-0 transition-transform active:scale-90">
+                            {goal.completed ? <CheckCircle className="w-8 h-8 text-emerald-500 fill-white rounded-full" /> : <Circle className="w-8 h-8 text-slate-200 group-hover:text-indigo-200" />}
                           </button>
                           <div className="flex-1 min-w-0">
                             <h4 className={`font-bold text-slate-800 truncate ${goal.completed ? 'line-through text-slate-400' : ''}`}>{goal.title}</h4>
@@ -408,30 +440,36 @@ const App: React.FC = () => {
 
         {activeTab === 'shop' && (
           <div className="space-y-6 animate-in slide-in-from-left-4 duration-500">
-            <header className="bg-amber-400 p-8 rounded-[3rem] text-white shadow-xl text-center">
+            <header className="bg-amber-400 p-8 rounded-[3rem] text-white shadow-xl text-center relative overflow-hidden">
               <ShoppingCart className="w-12 h-12 mx-auto mb-2" />
               <h2 className="text-2xl font-black">متجر الجوائز الذكي</h2>
-              <button onClick={() => setIsAddingReward(true)} className="mt-4 bg-white/20 hover:bg-white/30 px-6 py-2 rounded-full font-black text-sm">+ إضافة جائزة</button>
+              <button 
+                onClick={() => setIsAddingReward(true)}
+                className="mt-4 bg-white/20 hover:bg-white/30 px-6 py-2 rounded-full font-black text-sm transition-all"
+              >
+                + إضافة جائزة جديدة
+              </button>
             </header>
 
             {isAddingReward && (
-              <div className="bg-white p-6 rounded-[2rem] border-2 border-amber-200 space-y-4 shadow-xl">
+              <div className="bg-white p-6 rounded-[2rem] border-2 border-amber-200 space-y-4 shadow-xl animate-in zoom-in">
                 <div className="flex justify-between items-center">
                   <h3 className="font-black text-slate-800">ما هي جائزتك؟</h3>
                   <button onClick={() => setIsAddingReward(false)}><X className="w-5 h-5 text-slate-300" /></button>
                 </div>
+                <p className="text-[10px] text-slate-400 font-bold">اكتب الجائزة وسيقوم Gemini بتقدير سعرها العادل بالنقاط.</p>
                 <input 
                   type="text" 
                   value={newRewardTitle} 
                   onChange={(e) => setNewRewardTitle(e.target.value)}
-                  placeholder="مثلاً: وجبة مطعم، شراء لعبة..."
-                  className="w-full p-3 bg-slate-50 rounded-xl border-2 border-slate-100 font-bold"
+                  placeholder="مثلاً: وجبة مطعم، ساعة نوم، شراء لعبة..."
+                  className="w-full p-3 bg-slate-50 rounded-xl border-2 border-slate-100 focus:border-amber-400 focus:outline-none font-bold"
                   disabled={isAiLoading}
                 />
                 <button 
                   onClick={addCustomReward} 
                   disabled={isAiLoading || !newRewardTitle.trim()}
-                  className="w-full bg-amber-500 text-white p-3 rounded-xl font-black shadow-lg flex items-center justify-center gap-2"
+                  className="w-full bg-amber-500 text-white p-3 rounded-xl font-black shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
                 >
                   {isAiLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "إضافة وحساب التكلفة"}
                 </button>
@@ -443,20 +481,32 @@ const App: React.FC = () => {
                 const RewardIcon = REWARD_ICONS[reward.icon] || Tag;
                 const canAfford = stats.totalPoints >= reward.cost;
                 return (
-                  <div key={reward.id} className="bg-white p-6 rounded-[2rem] border-2 border-slate-50 text-center shadow-sm relative group">
+                  <div key={reward.id} className="bg-white p-6 rounded-[2rem] border-2 border-slate-50 text-center shadow-sm hover:shadow-xl transition-all relative group">
                     {reward.id.length > 5 && (
-                      <button onClick={() => setCustomRewards(prev => prev.filter(r => r.id !== reward.id))} className="absolute top-4 left-4 text-slate-200 hover:text-red-400 opacity-0 group-hover:opacity-100"><Trash2 className="w-3 h-3" /></button>
+                      <button 
+                        onClick={() => setCustomRewards(prev => prev.filter(r => r.id !== reward.id))}
+                        className="absolute top-4 left-4 text-slate-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     )}
-                    <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-3 text-amber-500"><RewardIcon className="w-6 h-6" /></div>
+                    <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-3 text-amber-500">
+                      <RewardIcon className="w-6 h-6" />
+                    </div>
                     <h3 className="font-bold text-slate-800 text-sm h-8 flex items-center justify-center">{reward.title}</h3>
                     <p className="font-black text-indigo-600 text-xl my-2">{reward.cost} ن</p>
                     <button 
                       onClick={() => {
                         if (canAfford) {
-                          setStats(s => ({ ...s, totalPoints: s.totalPoints - reward.cost, isRestDay: reward.specialEffect === 'rest_day' ? true : s.isRestDay }));
+                          setStats(s => ({ 
+                            ...s, 
+                            totalPoints: s.totalPoints - reward.cost, 
+                            isRestDay: reward.specialEffect === 'rest_day' ? true : s.isRestDay 
+                          }));
+                          alert(`تم شراء "${reward.title}"! استمتع بوقتك.`);
                         } else alert("نقاطك لا تكفي!");
                       }}
-                      className={`w-full py-2 rounded-xl font-black text-sm ${canAfford ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-300'}`}
+                      className={`w-full py-2 rounded-xl font-black text-sm transition-all ${canAfford ? 'bg-slate-900 text-white active:scale-95' : 'bg-slate-100 text-slate-300'}`}
                     >
                       شراء
                     </button>
@@ -484,15 +534,19 @@ const App: React.FC = () => {
               <button 
                 onClick={handleSmartBudgetAnalysis}
                 disabled={isAiLoading}
-                className="w-full mt-6 bg-white text-emerald-600 p-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2"
+                className="w-full mt-6 bg-white text-emerald-600 p-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg hover:bg-emerald-50 transition-colors disabled:opacity-50"
               >
                 {isAiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><MessageSquareQuote className="w-4 h-4" /> تحليل المصروفات بالذكاء الاصطناعي</>}
               </button>
             </div>
 
             {aiBudgetAdvice && (
-              <div className="bg-indigo-50 border-2 border-indigo-100 p-6 rounded-[2rem]">
+              <div className="bg-indigo-50 border-2 border-indigo-100 p-6 rounded-[2rem] animate-in slide-in-from-top-4">
+                <div className="flex items-center gap-2 mb-2 text-indigo-600 font-black">
+                  <Sparkles className="w-4 h-4" /> نصيحة Gemini
+                </div>
                 <p className="text-slate-700 font-bold leading-relaxed">{aiBudgetAdvice}</p>
+                <button onClick={() => setAiBudgetAdvice(null)} className="mt-2 text-[10px] text-indigo-400 font-black hover:underline">إخفاء</button>
               </div>
             )}
 
@@ -503,14 +557,14 @@ const App: React.FC = () => {
                   value={expenseAmount} 
                   onChange={(e) => setExpenseAmount(e.target.value)}
                   placeholder="المبلغ"
-                  className="w-24 p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-black"
+                  className="w-24 p-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:outline-none focus:border-emerald-500 font-black"
                 />
                 <input 
                   type="text" 
                   value={expenseNote} 
                   onChange={(e) => setExpenseNote(e.target.value)}
                   placeholder="ماذا اشتريت؟"
-                  className="flex-1 p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold"
+                  className="flex-1 p-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:outline-none focus:border-emerald-500 font-bold"
                 />
                 <button 
                   onClick={() => {
@@ -524,7 +578,7 @@ const App: React.FC = () => {
                       setExpenseAmount(''); setExpenseNote('');
                     }
                   }}
-                  className="bg-emerald-500 text-white px-4 rounded-xl shadow-lg"
+                  className="bg-emerald-500 text-white px-4 rounded-xl shadow-lg active:scale-90"
                 >
                   <Plus />
                 </button>
@@ -532,6 +586,8 @@ const App: React.FC = () => {
             </section>
 
             <div className="space-y-3">
+              <h3 className="text-xs font-black text-slate-300 px-4 uppercase">المشتريات الأخيرة</h3>
+              {budget.expenses.length === 0 && <p className="text-center text-slate-300 text-xs py-10 font-bold">لم يتم تسجيل مصروفات اليوم بعد</p>}
               {budget.expenses.map(exp => (
                 <div key={exp.id} className="bg-white p-4 rounded-2xl border-2 border-slate-50 flex justify-between items-center group">
                   <div className="flex items-center gap-3">
@@ -543,7 +599,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-black text-red-500">-{exp.amount} ج</span>
-                    <button onClick={() => setBudget(prev => ({ ...prev, spentToday: prev.spentToday - exp.amount, expenses: prev.expenses.filter(e => e.id !== exp.id) }))} className="text-slate-200 hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
+                    <button onClick={() => setBudget(prev => ({ ...prev, spentToday: prev.spentToday - exp.amount, expenses: prev.expenses.filter(e => e.id !== exp.id) }))} className="text-slate-200 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
                   </div>
                 </div>
               ))}
@@ -573,7 +629,7 @@ const App: React.FC = () => {
               {Object.entries(CATEGORY_CONFIG).map(([key, config]) => {
                 const catStats = stats.categories[key as GoalCategory] || { level: 1, exp: 0 };
                 return (
-                  <div key={key} className="bg-white p-5 rounded-[2rem] border border-slate-100 flex items-center gap-4">
+                  <div key={key} className="bg-white p-5 rounded-[2rem] border border-slate-100 flex items-center gap-4 shadow-sm hover:shadow-md transition-all">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${config.bg} ${config.color}`}>
                       <config.icon className="w-6 h-6" />
                     </div>
@@ -583,7 +639,10 @@ const App: React.FC = () => {
                         <span className="text-[10px] font-black text-indigo-500">مستوى {catStats.level}</span>
                       </div>
                       <div className="h-2 bg-slate-50 rounded-full overflow-hidden">
-                        <div className={`h-full ${config.color.replace('text', 'bg')} transition-all duration-1000`} style={{ width: `${catStats.exp}%` }} />
+                        <div 
+                          className={`h-full ${config.color.replace('text', 'bg')} transition-all duration-1000 ease-out`} 
+                          style={{ width: `${Math.min(100, catStats.exp)}%` }} 
+                        />
                       </div>
                     </div>
                   </div>

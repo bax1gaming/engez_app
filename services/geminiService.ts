@@ -2,7 +2,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { GoalCategory, Expense } from "../types.ts";
 
-const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+// Helper to ensure we always get a fresh instance with the latest key
+const getAi = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.warn("API_KEY is not defined in process.env");
+  }
+  return new GoogleGenAI({ apiKey: apiKey || "" });
+};
 
 export const categorizeGoal = async (title: string, description: string): Promise<GoalCategory> => {
   try {
@@ -33,7 +40,7 @@ export const calculateRewardCost = async (rewardTitle: string): Promise<number> 
     const cost = parseInt(costText);
     return isNaN(cost) ? 200 : cost;
   } catch (e) {
-    return 250; // Default fallback
+    return 250;
   }
 };
 
@@ -54,15 +61,23 @@ export const analyzeBudget = async (expenses: Expense[], dailyLimit: number): Pr
 export const generateGoalBreakdown = async (yearlyGoal: string) => {
   try {
     const ai = getAi();
+    // Using Pro for complex reasoning tasks to ensure JSON reliability on Vercel
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `أنت خبير إنتاجية وباحث. قم بتحليل هذا الهدف السنوي: "${yearlyGoal}".
-      1. ابحث في أفضل الممارسات لتحقيقه.
-      2. قسمه إلى 3 أهداف شهرية كبرى.
-      3. لكل شهر، أعطني هدفين أسبوعيين محددين.
-      4. اقترح "مهمة يومية" بسيطة.
-      5. حدد فئة هذا الهدف (religious, physical, academic, general).
-      رد بصيغة JSON فقط.`,
+      model: 'gemini-3-pro-preview',
+      contents: `أنت خبير إنتاجية. حلل هذا الهدف السنوي: "${yearlyGoal}".
+      قسمه إلى 3 أهداف شهرية، ولكل شهر هدفين أسبوعيين، واقترح مهمة يومية.
+      رد بصيغة JSON فقط تتبع هذا المخطط:
+      {
+        "category": "religious" | "physical" | "academic" | "general",
+        "monthlyGoals": [
+          {
+            "title": "عنوان الشهر",
+            "description": "وصف قصير",
+            "weeklySubGoals": ["هدف 1", "هدف 2"]
+          }
+        ],
+        "suggestedDailyTask": "مهمة يومية"
+      }`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -90,34 +105,21 @@ export const generateGoalBreakdown = async (yearlyGoal: string) => {
         }
       }
     });
-    return JSON.parse(response.text || "{}");
+    
+    const text = response.text;
+    if (!text) throw new Error("Empty AI response");
+    return JSON.parse(text);
   } catch (e) {
-    console.error("Breakdown failed", e);
-    return null;
-  }
-};
-
-export const generateDailyQuest = async (currentMonthlyGoals: string[]) => {
-  try {
-    const ai = getAi();
-    const goalsContext = currentMonthlyGoals.join(", ");
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `بناءً على أهدافي الشهرية: [${goalsContext}]، اقترح مهمة يومية واحدة وفئتها. الفئات المتاحة: religious, physical, academic, general.`,
-      config: { 
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            category: { type: Type.STRING }
-          },
-          required: ["title", "category"]
-        }
-      }
-    });
-    return JSON.parse(response.text || "{}");
-  } catch (e) {
-    return { title: "خطوة صغيرة نحو أهدافك الكبيرة", category: 'general' };
+    console.error("AI Breakdown failed, triggering fallback", e);
+    // Return a structured fallback to prevent UI crash
+    return {
+      category: "general",
+      monthlyGoals: [
+        { title: "بداية الخطة", description: "البدء في تنفيذ الخطوات الأولى", weeklySubGoals: ["تحديد المتطلبات", "وضع جدول زمني"] },
+        { title: "مرحلة التركيز", description: "تكثيف العمل على الهدف", weeklySubGoals: ["المداومة اليومية", "تقييم الأداء"] },
+        { title: "الاستمرارية", description: "الحفاظ على المكتسبات", weeklySubGoals: ["مراجعة نهائية", "الاحتفال بالإنجاز"] }
+      ],
+      suggestedDailyTask: "القيام بخطوة صغيرة اليوم"
+    };
   }
 };
