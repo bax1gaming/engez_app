@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Trophy, Target, ShoppingCart, Wallet, Plus, CheckCircle, Circle, 
   Gamepad2, Coffee, BrainCircuit, Trash2, Sparkles, Clock, 
@@ -40,7 +40,6 @@ const App: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  // Persistence logic with error handling
   const [goals, setGoals] = useState<Goal[]>(() => {
     try {
       const saved = localStorage.getItem('enjaz_goals');
@@ -86,7 +85,6 @@ const App: React.FC = () => {
   const [isAddingReward, setIsAddingReward] = useState(false);
   const [newRewardTitle, setNewRewardTitle] = useState('');
 
-  // Sync state to local storage
   useEffect(() => {
     setIsSaving(true);
     localStorage.setItem('enjaz_goals', JSON.stringify(goals));
@@ -97,13 +95,11 @@ const App: React.FC = () => {
     return () => clearTimeout(t);
   }, [goals, customRewards, budget, stats]);
 
-  // Morning Reset & Dynamic Task Generation
   useEffect(() => {
     const today = new Date().toDateString();
     if (lastResetDate !== today) {
       const performReset = async () => {
         setIsAiLoading(true);
-        // Clean old daily tasks but keep fixed ones
         const cleaned = goals.map(g => {
           if (g.timeFrame === 'daily') {
             if (FIXED_DAILY_TASKS.some(f => f.id === g.id)) return { ...g, completed: false };
@@ -112,7 +108,6 @@ const App: React.FC = () => {
           return g;
         }).filter(Boolean) as Goal[];
 
-        // Generate new dynamic tasks based on yearly goals
         const yearly = cleaned.filter(g => g.timeFrame === 'yearly');
         let newAiTasks: Goal[] = [];
         if (yearly.length > 0) {
@@ -131,7 +126,7 @@ const App: React.FC = () => {
 
         setGoals([...newAiTasks, ...cleaned]);
         setStats(s => ({ ...s, isRestDay: false }));
-        setBudget(b => ({ ...b, spentToday: 0, expenses: [] })); // Reset daily spending
+        setBudget(b => ({ ...b, spentToday: 0, expenses: [] }));
         setLastResetDate(today);
         localStorage.setItem('enjaz_last_reset', today);
         setIsAiLoading(false);
@@ -162,30 +157,29 @@ const App: React.FC = () => {
     setIsAiLoading(true);
     try {
       const res = await generateGoalBreakdown(newGoalText);
-      // Even if AI fails, the service now provides a local fallback, so res will likely be valid.
-      if (res && res.monthlyGoals) {
+      if (res && res.learningPath) {
         const yId = Date.now().toString();
         const cat = (res.category || 'general').toLowerCase() as GoalCategory;
-        const yearly: Goal = { id: yId, title: newGoalText, description: 'تحليل ذكي مخصص', timeFrame: 'yearly', category: cat, completed: false, failed: false, points: 500, dueDate: new Date().toISOString() };
+        const yearly: Goal = { id: yId, title: newGoalText, description: 'مسار تعلم ذكي بواسطة Gemini 3', timeFrame: 'yearly', category: cat, completed: false, failed: false, points: 500, dueDate: new Date().toISOString() };
         
         const subs: Goal[] = [];
-        res.monthlyGoals.forEach((m: any, idx: number) => {
+        res.learningPath.forEach((m: any, idx: number) => {
           const mId = `${yId}-m-${idx}`;
-          subs.push({ id: mId, title: m.title, description: m.description, timeFrame: 'monthly', category: cat, completed: false, failed: false, points: 100, dueDate: new Date().toISOString(), isAiGenerated: true });
-          m.weeklySubGoals.forEach((w: string, wIdx: number) => {
+          subs.push({ id: mId, title: m.monthTitle, description: m.monthDescription, timeFrame: 'monthly', category: cat, completed: false, failed: false, points: 100, dueDate: new Date().toISOString(), isAiGenerated: true });
+          m.weeklySteps.forEach((w: string, wIdx: number) => {
             subs.push({ id: `${mId}-w-${wIdx}`, title: w, description: '', timeFrame: 'weekly', category: cat, completed: false, failed: false, points: 50, dueDate: new Date().toISOString(), isAiGenerated: true });
           });
         });
         
-        if (res.suggestedDailyTask) {
-          subs.push({ id: `${yId}-d`, title: res.suggestedDailyTask, description: 'مهمة يومية مقترحة لتعزيز الهدف', timeFrame: 'daily', category: cat, completed: false, failed: false, points: 15, dueDate: new Date().toISOString(), isAiGenerated: true });
+        if (res.persistentDailyTask) {
+          subs.push({ id: `${yId}-d`, title: res.persistentDailyTask, description: 'عادة يومية مستمرة لتعزيز الهدف', timeFrame: 'daily', category: cat, completed: false, failed: false, points: 15, dueDate: new Date().toISOString(), isAiGenerated: true });
         }
         
         setGoals(p => [yearly, ...subs, ...p]);
         setNewGoalText('');
       }
     } catch (e) {
-      alert("عذراً، حدث خطأ أثناء التواصل مع الذكاء الاصطناعي. يرجى المحاولة مرة أخرى.");
+      alert("عذراً، حدث خطأ أثناء التواصل مع Gemini. يرجى المحاولة مرة أخرى.");
     } finally { setIsAiLoading(false); }
   };
 
@@ -210,12 +204,9 @@ const App: React.FC = () => {
     }));
   };
 
-  const dayName = new Date().toLocaleDateString('ar-EG', { weekday: 'long' });
-
   return (
     <div className="min-h-screen pb-28 max-w-2xl mx-auto bg-slate-50 shadow-2xl overflow-hidden flex flex-col font-['Cairo']">
       
-      {/* Dynamic Header */}
       <header className={`p-6 sticky top-0 z-50 rounded-b-[2.5rem] shadow-xl transition-all duration-500 ${stats.isRestDay ? 'bg-amber-500' : 'bg-indigo-600'} text-white`}>
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-3">
@@ -228,18 +219,17 @@ const App: React.FC = () => {
                 {isSaving && <Save className="w-3 h-3 opacity-50 animate-bounce" />}
               </div>
               <div className="flex items-center gap-2 text-[10px] font-bold bg-white/10 px-2 py-0.5 rounded-full">
-                <CalendarDays className="w-3 h-3" /> {dayName}
+                <CalendarDays className="w-3 h-3" /> {new Date().toLocaleDateString('ar-EG', { weekday: 'long' })}
               </div>
             </div>
           </div>
-          <div className="bg-white text-slate-800 px-4 py-2 rounded-3xl flex items-center gap-2 shadow-lg group hover:scale-105 transition-transform">
+          <div className="bg-white text-slate-800 px-4 py-2 rounded-3xl flex items-center gap-2 shadow-lg hover:scale-105 transition-transform">
             <Trophy className="w-5 h-5 text-amber-500" />
             <span className="font-black text-lg">{stats.totalPoints}</span>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area */}
       <main className="flex-1 p-4 overflow-y-auto space-y-6 custom-scrollbar">
         
         {activeTab === 'goals' && (
@@ -247,7 +237,7 @@ const App: React.FC = () => {
             {isAiLoading && (
               <div className="bg-indigo-600/10 border-2 border-indigo-200 p-4 rounded-3xl flex items-center justify-center gap-3 animate-pulse">
                 <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
-                <span className="font-black text-indigo-600 text-sm">جاري التفكير بالذكاء الاصطناعي...</span>
+                <span className="font-black text-indigo-600 text-sm">Gemini 3 Pro يخطط لمسار تعلمك...</span>
               </div>
             )}
 
@@ -256,14 +246,14 @@ const App: React.FC = () => {
                 <Sparkles className="w-32 h-32 text-indigo-200" />
               </div>
               <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-indigo-500" /> خطة جديدة
+                <Plus className="w-5 h-5 text-indigo-500" /> هدف جديد
               </h2>
               <div className="space-y-4">
                 <input
                   type="text"
                   value={newGoalText}
                   onChange={(e) => setNewGoalText(e.target.value)}
-                  placeholder="أدخل هدفاً كبيراً (مثلاً: إتقان اللغة الألمانية)"
+                  placeholder="ما هو هدفك الكبير؟ (مثلاً: تعلم تطوير المواقع)"
                   className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:outline-none font-bold text-slate-800"
                   onKeyDown={(e) => e.key === 'Enter' && handleAiBreakdown()}
                 />
@@ -280,13 +270,12 @@ const App: React.FC = () => {
                     disabled={isAiLoading || !newGoalText.trim()}
                     className="bg-indigo-600 text-white px-6 rounded-2xl font-black flex items-center gap-2 shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50"
                   >
-                    <Sparkles className="w-5 h-5" /> تقسيم ذكي
+                    <Sparkles className="w-5 h-5" /> مسار تعلم ذكي
                   </button>
                 </div>
               </div>
             </section>
 
-            {/* List Grouping */}
             {['daily', 'weekly', 'monthly', 'yearly'].map((t) => {
               const f = goals.filter(g => g.timeFrame === t);
               if (f.length === 0) return null;
@@ -294,7 +283,7 @@ const App: React.FC = () => {
                 <div key={t} className="space-y-3">
                   <h3 className="text-xs font-black text-slate-400 px-4 flex items-center gap-2 uppercase tracking-widest">
                     {t === 'daily' ? <Clock className="w-3 h-3" /> : <CalendarRange className="w-3 h-3" />}
-                    {t === 'daily' ? 'قائمة اليوم' : t === 'weekly' ? 'هذا الأسبوع' : t === 'monthly' ? 'أهداف الشهر' : 'أهداف السنة'}
+                    {t === 'daily' ? 'اليوم' : t === 'weekly' ? 'الأسبوع' : t === 'monthly' ? 'الشهر' : 'أهداف السنة'}
                   </h3>
                   <div className="space-y-2">
                     {f.map(g => {
@@ -329,7 +318,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Shop Tab */}
+        {/* Tab content for Shop, Budget, Stats remains the same for consistency */}
         {activeTab === 'shop' && (
           <div className="space-y-6 animate-in slide-in-from-left-4 duration-500">
              <header className="bg-amber-400 p-8 rounded-[3rem] text-white shadow-xl text-center relative overflow-hidden">
@@ -341,7 +330,7 @@ const App: React.FC = () => {
             {isAddingReward && (
               <div className="bg-white p-6 rounded-[2rem] border-2 border-amber-200 space-y-4 animate-in zoom-in">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-black text-slate-800">ما هي جائزتك المقترحة؟</h3>
+                  <h3 className="font-black text-slate-800">ما هي جائزتك؟</h3>
                   <button onClick={() => setIsAddingReward(false)}><X className="w-5 h-5 text-slate-300" /></button>
                 </div>
                 <input type="text" value={newRewardTitle} onChange={(e) => setNewRewardTitle(e.target.value)} placeholder="اسم الجائزة..." className="w-full p-3 bg-slate-50 rounded-xl border-2 border-slate-100 font-bold focus:outline-none focus:border-amber-400" />
@@ -373,7 +362,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Budget Tab - Fixed with visible expense list */}
         {activeTab === 'budget' && (
           <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
             <div className="bg-emerald-500 text-white p-8 rounded-[3rem] shadow-xl relative overflow-hidden">
@@ -386,7 +374,7 @@ const App: React.FC = () => {
                 </div>
                 <button 
                   onClick={async () => {
-                    if (budget.expenses.length === 0) return alert("سجل بعض المشتريات أولاً ليتمكن Gemini من تحليلها.");
+                    if (budget.expenses.length === 0) return alert("سجل بعض المشتريات أولاً.");
                     setIsAiLoading(true);
                     const ad = await analyzeBudget(budget.expenses, budget.dailyLimit);
                     setAiBudgetAdvice(ad);
@@ -394,7 +382,7 @@ const App: React.FC = () => {
                   }} 
                   className="bg-white text-emerald-600 rounded-3xl font-black text-xs hover:bg-slate-50 transition-colors shadow-lg"
                 >
-                  تحليل ذكي للمصروفات
+                  تحليل Gemini
                 </button>
               </div>
             </div>
@@ -408,10 +396,10 @@ const App: React.FC = () => {
             )}
 
             <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
-              <h3 className="text-sm font-black text-slate-800 mb-4">إضافة مصروف جديد</h3>
+              <h3 className="text-sm font-black text-slate-800 mb-4">إضافة مصروف</h3>
               <div className="flex gap-2">
                 <input type="number" value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} placeholder="0" className="w-24 p-3 bg-slate-50 rounded-xl border-2 border-slate-100 font-black focus:outline-none focus:border-emerald-500" />
-                <input type="text" value={expenseNote} onChange={(e) => setExpenseNote(e.target.value)} placeholder="مثلاً: وجبة غداء، فاتورة..." className="flex-1 p-3 bg-slate-50 rounded-xl border-2 border-slate-100 font-bold focus:outline-none focus:border-emerald-500" />
+                <input type="text" value={expenseNote} onChange={(e) => setExpenseNote(e.target.value)} placeholder="التفاصيل..." className="flex-1 p-3 bg-slate-50 rounded-xl border-2 border-slate-100 font-bold focus:outline-none focus:border-emerald-500" />
                 <button onClick={() => {
                   const a = parseFloat(expenseAmount);
                   if (a > 0) {
@@ -426,13 +414,12 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Expenses List Section */}
             <div className="space-y-3">
-              <h3 className="text-xs font-black text-slate-400 px-4 uppercase tracking-wider">سجل المشتريات اليومية</h3>
+              <h3 className="text-xs font-black text-slate-400 px-4 uppercase tracking-wider">سجل اليوم</h3>
               {budget.expenses.length === 0 ? (
                 <div className="bg-white/50 border-2 border-dashed border-slate-200 rounded-[2rem] py-12 text-center">
                   <ReceiptText className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                  <p className="text-slate-300 font-bold text-xs">لا توجد مصروفات مسجلة لليوم بعد</p>
+                  <p className="text-slate-300 font-bold text-xs">لا توجد مصروفات مسجلة</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -462,7 +449,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Stats Tab */}
         {activeTab === 'stats' && (
           <div className="space-y-6 animate-in fade-in duration-500">
              <div className="bg-slate-900 text-white p-8 rounded-[3rem] relative overflow-hidden shadow-2xl">
@@ -481,7 +467,6 @@ const App: React.FC = () => {
              </div>
              
              <div className="space-y-4">
-               <h3 className="text-xs font-black text-slate-400 px-4 uppercase tracking-widest">تطور المهارات</h3>
                {Object.entries(CATEGORY_CONFIG).map(([k, c]) => {
                   const s = stats.categories[k as GoalCategory] || { level: 1, exp: 0 };
                   const CatIcon = c.icon;
@@ -510,7 +495,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Navigation Bar */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto bg-white/95 backdrop-blur-xl border-t border-slate-100 p-4 flex justify-around items-center z-50 rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
         <button onClick={() => setActiveTab('goals')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'goals' ? 'text-indigo-600 scale-110' : 'text-slate-300'}`}>
           <LayoutGrid className="w-6 h-6" />

@@ -25,22 +25,30 @@ export const categorizeGoal = async (title: string, description: string): Promis
 export const generateGoalBreakdown = async (yearlyGoal: string) => {
   try {
     const ai = getAi();
+    // استخدام Gemini 3 Pro للمهام المعقدة مثل التخطيط الاستراتيجي
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `أنت خبير إنتاجية عالمي. قم بتحليل الهدف السنوي التالي بدقة فائقة: "${yearlyGoal}". 
-      صمم خطة استراتيجية فريدة تتكون من 3 أهداف شهرية (كل شهر له عنوان ووصف وخطتين أسبوعيتين) بالإضافة إلى مهمة يومية واحدة مستمرة.
-      يجب أن تكون جميع العناوين والوصف مرتبطة بشكل مباشر وحصري بالهدف: "${yearlyGoal}".
-      رد بصيغة JSON فقط تتبع هذا المخطط:
+      model: 'gemini-3-pro-preview',
+      contents: `أنت خبير في التخطيط الاستراتيجي والتعلم الذاتي. 
+      المطلوب: إنشاء "مسار تعلم" (Learning Path) احترافي للهدف السنوي: "${yearlyGoal}".
+      
+      يجب أن تتضمن الخطة:
+      1. تقسيم الهدف إلى 3 مراحل شهرية متتابعة (بداية، تطوير، إتقان).
+      2. لكل شهر، حدد مهمتين أسبوعيتين دقيقتين.
+      3. حدد "عادة يومية" (Daily Habit) بسيطة جداً تضمن التقدم المستمر في هذا الهدف.
+      
+      يجب أن تكون المصطلحات المستخدمة في العناوين والوصف مرتبطة بعمق بمجال ${yearlyGoal}.
+      
+      رد بصيغة JSON فقط بهذا الهيكل:
       {
-        "category": "الفئة بالإنجليزية",
-        "monthlyGoals": [
+        "category": "academic" | "religious" | "physical" | "general",
+        "learningPath": [
           {
-            "title": "عنوان الشهر مخصص",
-            "description": "وصف المهمة الشهرية",
-            "weeklySubGoals": ["مهمة الأسبوع 1", "مهمة الأسبوع 2"]
+            "monthTitle": "عنوان المرحلة الشهرية",
+            "monthDescription": "وصف ما سيتم تحقيقه",
+            "weeklySteps": ["خطوة الأسبوع 1", "خطوة الأسبوع 2"]
           }
         ],
-        "suggestedDailyTask": "مهمة يومية بسيطة"
+        "persistentDailyTask": "المهمة اليومية المستمرة"
       }`,
       config: {
         responseMimeType: "application/json",
@@ -48,40 +56,39 @@ export const generateGoalBreakdown = async (yearlyGoal: string) => {
           type: Type.OBJECT,
           properties: {
             category: { type: Type.STRING },
-            monthlyGoals: {
+            learningPath: {
               type: Type.ARRAY,
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  title: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  weeklySubGoals: { type: Type.ARRAY, items: { type: Type.STRING } }
+                  monthTitle: { type: Type.STRING },
+                  monthDescription: { type: Type.STRING },
+                  weeklySteps: { type: Type.ARRAY, items: { type: Type.STRING } }
                 },
-                required: ["title", "description", "weeklySubGoals"]
+                required: ["monthTitle", "monthDescription", "weeklySteps"]
               },
               minItems: 3
             },
-            suggestedDailyTask: { type: Type.STRING }
+            persistentDailyTask: { type: Type.STRING }
           },
-          required: ["monthlyGoals", "suggestedDailyTask", "category"]
+          required: ["learningPath", "persistentDailyTask", "category"]
         }
       }
     });
 
     const result = JSON.parse(response.text || "{}");
-    if (!result.monthlyGoals || result.monthlyGoals.length === 0) throw new Error("Invalid structure");
     return result;
   } catch (e) {
-    console.error("AI Breakdown Error, providing local fallback:", e);
-    // نظام خطة احتياطية فورية لضمان عدم توقف التطبيق
+    console.error("Gemini 3 Pro Breakdown Error:", e);
+    // نظام خطة احتياطية ذكي في حال فشل الـ API
     return {
       category: "general",
-      monthlyGoals: [
-        { title: `البدء في ${yearlyGoal}`, description: "وضع حجر الأساس والبدء بالخطوات الأولى", weeklySubGoals: ["تحديد المتطلبات الأساسية", "تنظيم الجدول الزمني"] },
-        { title: `تطوير مهارات ${yearlyGoal}`, description: "التركيز على الجوانب التقنية والتطبيقية", weeklySubGoals: ["تطبيق عملي مكثف", "مراجعة التقدم وتعديل المسار"] },
-        { title: `إتقان ${yearlyGoal}`, description: "الوصول إلى النتائج النهائية المطلوبة", weeklySubGoals: ["إنهاء المهام الكبرى", "تقييم الإنجاز النهائي"] }
+      learningPath: [
+        { monthTitle: `مرحلة التأسيس في ${yearlyGoal}`, monthDescription: "بناء القواعد الأساسية وفهم الأدوات", weeklySteps: ["البحث عن أفضل المصادر", "وضع جدول تعلم ثابت"] },
+        { monthTitle: `مرحلة التطبيق العملي`, monthDescription: "تطبيق ما تم تعلمه في مشاريع صغيرة", weeklySteps: ["إنجاز أول مشروع مصغر", "مراجعة الأخطاء وتصحيحها"] },
+        { monthTitle: `مرحلة التوسع والإتقان`, monthDescription: "الوصول لمستوى متقدم ومشاركة المعرفة", weeklySteps: ["إنجاز مشروع نهائي متكامل", "تقييم مستوى الإتقان"] }
       ],
-      suggestedDailyTask: `خطوة صغيرة نحو ${yearlyGoal}`
+      persistentDailyTask: `30 دقيقة من التركيز على ${yearlyGoal}`
     };
   }
 };
@@ -93,12 +100,10 @@ export const generateDailyTasksForProgress = async (yearlyGoals: Goal[]) => {
     const goalsContext = yearlyGoals.map(g => g.title).join(", ");
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `بناءً على أهدافي السنوية الحالية: [${goalsContext}]، اقترح مهمتين (2) محددتين وذكيتين للقيام بهما اليوم لضمان التقدم المستمر. 
-      اجعل المهام جديدة تماماً ومبتكرة.
-      رد بصيغة JSON فقط: { "tasks": [{ "title": "مهمة محددة", "category": "الفئة بالإنجليزية" }] }`,
-      config: {
-        responseMimeType: "application/json"
-      }
+      contents: `بناءً على أهدافي الكبرى: [${goalsContext}]، اقترح مهمتين (2) محددتين وذكيتين لهذا اليوم. 
+      اجعلها مهام تنفيذية بسيطة (Actionable).
+      رد بصيغة JSON: { "tasks": [{ "title": "المهمة", "category": "الفئة" }] }`,
+      config: { responseMimeType: "application/json" }
     });
     const data = JSON.parse(response.text || "{}");
     return data.tasks || [];
@@ -112,21 +117,20 @@ export const calculateRewardCost = async (rewardTitle: string): Promise<number> 
     const ai = getAi();
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `بصفتك خبير أنظمة تحفيز، كم نقطة (Points) تستحق هذه المكافأة: "${rewardTitle}"؟ (رد برقم فقط بين 50 و 2000 بناءً على قيمة الجائزة).`,
+      contents: `بناءً على قيمة المكافأة: "${rewardTitle}"، كم نقطة تستحق؟ (رقم فقط من 50-2000).`,
     });
-    const cost = parseInt(response.text?.replace(/[^0-9]/g, '') || "200");
-    return isNaN(cost) ? 200 : cost;
-  } catch (e) { return 250; }
+    return parseInt(response.text?.replace(/[^0-9]/g, '') || "200");
+  } catch (e) { return 200; }
 };
 
 export const analyzeBudget = async (expenses: Expense[], dailyLimit: number): Promise<string> => {
   try {
     const ai = getAi();
-    const summary = expenses.map(e => `${e.description}: ${e.amount}ج`).join(", ");
+    const summary = expenses.map(e => `${e.description}: ${e.amount}`).join(", ");
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `بناءً على قائمة مصروفاتي اليوم: [${summary}] وحد المصروف اليومي (${dailyLimit}ج)، أعطني نصيحة مالية ذكية ومختصرة ومشجعة باللغة العربية.`,
+      contents: `حلل هذه المصروفات: [${summary}] والحد اليومي (${dailyLimit}). قدم نصيحة مالية بالعربية.`,
     });
-    return response.text || "وفر اليوم لترتاح غداً!";
-  } catch (e) { return "حافظ على ميزانيتك لتحقيق أهدافك!"; }
+    return response.text || "حافظ على توازن ميزانيتك!";
+  } catch (e) { return "استمر في مراقبة مصروفاتك!"; }
 };
