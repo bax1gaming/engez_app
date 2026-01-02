@@ -2,20 +2,21 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { GoalCategory } from "../types.ts";
 
-// Correctly initialize GoogleGenAI with the API key from environment variables.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const categorizeGoal = async (title: string, description: string): Promise<GoalCategory> => {
+  const ai = getAi();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `صنف هذه المهمة: "${title} - ${description}" إلى واحدة من الفئات التالية فقط: (religious, physical, academic, general). رد بالكلمة الإنجليزية للفئة فقط.`,
   });
-  const category = response.text.trim().toLowerCase() as GoalCategory;
+  const category = response.text?.trim().toLowerCase() as GoalCategory;
   const validCategories: GoalCategory[] = ['religious', 'physical', 'academic', 'general'];
   return validCategories.includes(category) ? category : 'general';
 };
 
 export const generateGoalBreakdown = async (yearlyGoal: string) => {
+  const ai = getAi();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `أنت خبير إنتاجية وباحث. قم بتحليل هذا الهدف السنوي: "${yearlyGoal}".
@@ -54,7 +55,7 @@ export const generateGoalBreakdown = async (yearlyGoal: string) => {
   });
 
   try {
-    return JSON.parse(response.text);
+    return JSON.parse(response.text || "{}");
   } catch (e) {
     console.error("Failed to parse AI response", e);
     return null;
@@ -62,6 +63,7 @@ export const generateGoalBreakdown = async (yearlyGoal: string) => {
 };
 
 export const generateDailyQuest = async (currentMonthlyGoals: string[]) => {
+  const ai = getAi();
   const goalsContext = currentMonthlyGoals.join(", ");
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
@@ -80,18 +82,20 @@ export const generateDailyQuest = async (currentMonthlyGoals: string[]) => {
   });
 
   try {
-    return JSON.parse(response.text);
+    return JSON.parse(response.text || "{}");
   } catch (e) {
-    return { title: response.text.trim(), category: 'general' };
+    return { title: response.text?.trim() || "مهمة جديدة", category: 'general' };
   }
 };
 
 export const calculateRewardCost = async (rewardTitle: string) => {
+  const ai = getAi();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `كم يجب أن يكون سعر هذه المكافأة بالنقاط: "${rewardTitle}"؟ رد فقط برقم صحيح بين 50 و 2000.`,
   });
 
-  const cost = parseInt(response.text.trim().replace(/[^0-9]/g, ''));
+  const costText = response.text?.trim().replace(/[^0-9]/g, '') || "200";
+  const cost = parseInt(costText);
   return isNaN(cost) ? 200 : cost;
 };
